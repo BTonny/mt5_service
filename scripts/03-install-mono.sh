@@ -4,6 +4,25 @@ source /scripts/02-common.sh
 
 log_message "RUNNING" "03-install-mono.sh"
 
+# Check if Wine prefix exists and is 32-bit, remove it if so
+if [ -d "/config/.wine" ]; then
+    if [ -f "/config/.wine/system.reg" ]; then
+        # Check if it's 32-bit by looking for "win32" in system.reg
+        if grep -q "#arch.*win32" /config/.wine/system.reg 2>/dev/null; then
+            log_message "INFO" "Removing existing 32-bit Wine prefix to create 64-bit installation..."
+            rm -rf /config/.wine
+        fi
+    fi
+fi
+
+# Initialize Wine as 64-bit if prefix doesn't exist
+if [ ! -d "/config/.wine" ]; then
+    log_message "INFO" "Initializing Wine as 64-bit..."
+    export WINEARCH=win64
+    export WINEPREFIX=/config/.wine
+    wineboot --init
+fi
+
 # Install Mono if not present
 if [ ! -e "/config/.wine/drive_c/windows/mono" ]; then
     log_message "INFO" "Downloading and installing Mono..."
@@ -23,5 +42,7 @@ else
     log_message "INFO" "Mono is already installed."
 fi
 
-# Initialize Wine configuration
+# Initialize Wine configuration (ensure 64-bit)
+export WINEARCH=win64
+export WINEPREFIX=/config/.wine
 winecfg
