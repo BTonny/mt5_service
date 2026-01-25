@@ -1,0 +1,19 @@
+services:
+  mt5:
+    build:
+      dockerfile: Dockerfile
+    container_name: mt5
+    ports:
+      - "5001:5001"  # Flask API
+      - "3000:3000"  # VNC (optional, for remote desktop)
+    volumes:
+      - ./config:/config
+    env_file:
+      - .env
+    restart: unless-stopped
+    environment:
+      - MT5_API_PORT=5001
+
+volumes:
+  config:
+    driver: local

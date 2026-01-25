@@ -103,11 +103,15 @@ docker-compose up -d --build
 curl http://localhost:5001/health
 ```
 
+For simplified local setup without Traefik, see [Local Development Setup](docs/LOCAL_SETUP.md).
+
 For VPS deployment, see [VPS Deployment Guide](docs/VPS_DEPLOYMENT.md).
 
 ## Installation
 
 ### Local Development
+
+For a simplified local setup without Traefik, see [Local Development Setup](docs/LOCAL_SETUP.md).
 
 1. **Navigate to project directory**
 

@@ -1,0 +1,55 @@
+# Environment variables
+.env
+.env.*
+# allow .env.example
+!.env.example
+
+# Runtime data and configuration
+config/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# SSL certificates (if stored locally)
+*.pem
+*.key
+*.crt
+*.cert
