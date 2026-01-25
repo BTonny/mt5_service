@@ -1,6 +1,6 @@
 # MT5 Service - MetaTrader 5 Trading Service
 
-A standalone Docker-based REST API service that provides programmatic access to MetaTrader 5 trading operations. Runs MT5 on Linux using Wine and exposes all functionality through a Flask REST API.
+A Docker-based REST API service that provides programmatic access to MetaTrader 5 trading operations. Runs MT5 on Linux using Wine and exposes all functionality through a Flask REST API.
 
 ## Table of Contents
 
