@@ -18,13 +18,52 @@ fi
 # Initialize Wine as 64-bit with explicit environment
 log_message "INFO" "Initializing Wine as 64-bit (WINEARCH=win64)..."
 
+# Ensure DISPLAY is set and Xvfb is running
+export DISPLAY=${DISPLAY:-:0}
+if ! pgrep -f "Xvfb.*:0" > /dev/null; then
+    log_message "INFO" "Starting Xvfb for Wine initialization..."
+    Xvfb :0 -screen 0 1024x768x24 > /dev/null 2>&1 &
+    sleep 2
+fi
+
 # Try to find wine64 binary first, fallback to wine
+WINE_BIN="wine"
 if command -v wine64 >/dev/null 2>&1; then
+    WINE_BIN="wine64"
     log_message "INFO" "Using wine64 binary for 64-bit initialization..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine wine64 wineboot --init 2>&1 | tee -a /var/log/mt5_setup.log
 else
     log_message "INFO" "Using wine binary with WINEARCH=win64..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine wineboot --init 2>&1 | tee -a /var/log/mt5_setup.log
+fi
+
+# Initialize Wine with timeout to prevent hanging
+log_message "INFO" "Running wineboot --init (this may take 30-60 seconds)..."
+timeout 120 bash -c "WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN wineboot --init" 2>&1 | tee -a /var/log/mt5_setup.log
+WINE_INIT_EXIT=${PIPESTATUS[0]}
+
+# Check if Wine initialization succeeded
+if [ $WINE_INIT_EXIT -ne 0 ]; then
+    log_message "ERROR" "Wine initialization failed with exit code $WINE_INIT_EXIT"
+    log_message "ERROR" "Checking for Wine installation issues..."
+    
+    # Check if Wine is properly installed
+    if ! command -v wine >/dev/null 2>&1 && ! command -v wine64 >/dev/null 2>&1; then
+        log_message "ERROR" "Wine binary not found! Wine installation may be broken."
+        exit 1
+    fi
+    
+    # Check Wine version
+    log_message "INFO" "Wine version: $($WINE_BIN --version 2>&1 || echo 'unknown')"
+    
+    # Try a simpler initialization without wineboot
+    log_message "INFO" "Trying alternative Wine initialization method..."
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f > /dev/null 2>&1
+    
+    # Check if system.reg was created (indicates successful init)
+    if [ ! -f "/config/.wine/system.reg" ]; then
+        log_message "ERROR" "Wine system.reg not created. Wine initialization failed."
+        log_message "ERROR" "This may indicate missing Wine dependencies or Wine installation issues."
+        exit 1
+    fi
 fi
 
 # Wait for Wine to fully initialize
