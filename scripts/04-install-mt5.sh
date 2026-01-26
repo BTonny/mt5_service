@@ -47,6 +47,17 @@ else
     
     log_message "INFO" "Installer file size: $(du -h /tmp/mt5setup.exe | cut -f1)"
     
+    # Start Wine explorer process (required for MT5 installer)
+    log_message "INFO" "Starting Wine explorer process (required for installer)..."
+    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable explorer > /dev/null 2>&1 &
+    EXPLORER_PID=$!
+    sleep 3
+    if ps -p $EXPLORER_PID > /dev/null 2>&1; then
+        log_message "INFO" "✅ Wine explorer started (PID: $EXPLORER_PID)"
+    else
+        log_message "WARN" "⚠️ Wine explorer may not have started, but continuing..."
+    fi
+    
     # Try running installer - capture only real errors, not trace messages
     log_message "INFO" "Attempting installation..."
     
@@ -91,7 +102,15 @@ else
         else
             # Try without /S flag - maybe it needs different flags
             log_message "WARN" "Installation with /S failed. Trying /auto flag..."
+            # Ensure explorer is still running
+            if ! pgrep -f "wine.*explorer" > /dev/null; then
+                log_message "INFO" "Restarting Wine explorer..."
+                WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable explorer > /dev/null 2>&1 &
+                sleep 2
+            fi
             WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /auto > /tmp/mt5_installer.log 2>&1
+            INSTALLER_EXIT=$?
+            log_message "INFO" "Installer exit code (with /auto): $INSTALLER_EXIT"
             sleep 10
             
             if [ -e "$mt5file" ]; then
