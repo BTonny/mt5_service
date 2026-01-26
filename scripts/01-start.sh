@@ -6,6 +6,18 @@ source /scripts/02-common.sh
 log_message "INFO" "=== Starting MT5 Service Setup ==="
 log_message "INFO" "This process will take 5-15 minutes. Progress will be logged here."
 
+# Start Xvfb virtual display (required for GUI applications in headless environment)
+log_message "INFO" "Starting virtual display (Xvfb)..."
+Xvfb :0 -screen 0 1024x768x24 > /dev/null 2>&1 &
+XVFB_PID=$!
+sleep 2
+export DISPLAY=:0
+if ps -p $XVFB_PID > /dev/null 2>&1; then
+    log_message "INFO" "✅ Virtual display started (PID: $XVFB_PID)"
+else
+    log_message "WARN" "⚠️ Virtual display may not have started"
+fi
+
 # Run installation scripts - MT5 MUST succeed
 log_message "INFO" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log_message "INFO" "Step 1/5: Installing Mono..."

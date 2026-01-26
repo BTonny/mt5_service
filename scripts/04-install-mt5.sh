@@ -47,9 +47,16 @@ else
     
     log_message "INFO" "Installer file size: $(du -h /tmp/mt5setup.exe | cut -f1)"
     
+    # Start Xvfb virtual display (required for GUI installers in headless environment)
+    log_message "INFO" "Starting virtual display (Xvfb)..."
+    Xvfb :0 -screen 0 1024x768x24 > /dev/null 2>&1 &
+    XVFB_PID=$!
+    sleep 2
+    export DISPLAY=:0
+    
     # Start Wine explorer process (required for MT5 installer)
     log_message "INFO" "Starting Wine explorer process (required for installer)..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable explorer > /dev/null 2>&1 &
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable explorer > /dev/null 2>&1 &
     EXPLORER_PID=$!
     sleep 3
     if ps -p $EXPLORER_PID > /dev/null 2>&1; then
@@ -64,11 +71,17 @@ else
     # Enable Wine debug output for errors only (not trace)
     export WINEDEBUG=+err,+warn
     
+    # Configure Wine to suppress error dialogs (exit code 222 often means user interaction needed)
+    log_message "INFO" "Configuring Wine to suppress error dialogs..."
+    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    
     # Try different installer flags - MT5 installer may need specific flags
     log_message "INFO" "Trying installation with /S flag (silent install)..."
     
-    # Run installer and capture exit code
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /S > /tmp/mt5_installer.log 2>&1
+    # Run installer with wine start /wait which handles GUI apps better
+    log_message "INFO" "Using 'wine start /wait' command for better GUI support..."
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable start /wait /unix /tmp/mt5setup.exe /S > /tmp/mt5_installer.log 2>&1
     INSTALLER_EXIT=$?
     
     log_message "INFO" "Installer exit code: $INSTALLER_EXIT"
@@ -76,10 +89,18 @@ else
     # Check for actual errors (not trace messages)
     if [ -f /tmp/mt5_installer.log ]; then
         # Filter out trace messages and show only real errors/warnings
-        REAL_ERRORS=$(grep -iE "error|fail|exception|warn|cannot|unable|missing" /tmp/mt5_installer.log 2>/dev/null | grep -v "trace:" | head -20)
+        REAL_ERRORS=$(grep -iE "error|fail|exception|warn|cannot|unable|missing|NtRaiseHardError" /tmp/mt5_installer.log 2>/dev/null | grep -v "trace:" | head -20)
         if [ -n "$REAL_ERRORS" ]; then
             log_message "ERROR" "Installer errors/warnings:"
             echo "$REAL_ERRORS" | while read line; do
+                log_message "ERROR" "  $line"
+            done
+        fi
+        
+        # If exit code is 222, show more context
+        if [ $INSTALLER_EXIT -eq 222 ]; then
+            log_message "ERROR" "Exit code 222 detected. Last 10 lines of installer log:"
+            tail -10 /tmp/mt5_installer.log | while read line; do
                 log_message "ERROR" "  $line"
             done
         fi
@@ -105,10 +126,15 @@ else
             # Ensure explorer is still running
             if ! pgrep -f "wine.*explorer" > /dev/null; then
                 log_message "INFO" "Restarting Wine explorer..."
-                WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable explorer > /dev/null 2>&1 &
+                WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable explorer > /dev/null 2>&1 &
                 sleep 2
             fi
-            WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /auto > /tmp/mt5_installer.log 2>&1
+            # Try with /auto flag using wine start command
+            log_message "INFO" "Trying with wine start command..."
+            WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable start /unix /tmp/mt5setup.exe /auto > /tmp/mt5_installer.log 2>&1
+            INSTALLER_EXIT=$?
+            log_message "INFO" "Installer exit code (wine start /auto): $INSTALLER_EXIT"
+            sleep 15  # Give it more time with wine start
             INSTALLER_EXIT=$?
             log_message "INFO" "Installer exit code (with /auto): $INSTALLER_EXIT"
             sleep 10
