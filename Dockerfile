@@ -55,10 +55,10 @@ RUN dos2unix /scripts/*.sh && \
 
 COPY /root /
 
-# Create init script to run startup script automatically
+# Create init script to run startup script automatically (runs as root during init)
 RUN mkdir -p /etc/cont-init.d && \
     echo '#!/bin/bash' > /etc/cont-init.d/99-start-mt5.sh && \
-    echo 'bash /scripts/01-start.sh &' >> /etc/cont-init.d/99-start-mt5.sh && \
+    echo '/scripts/01-start.sh &' >> /etc/cont-init.d/99-start-mt5.sh && \
     chmod +x /etc/cont-init.d/99-start-mt5.sh && \
     (chmod +x /root/defaults/autostart 2>/dev/null || true)
 
