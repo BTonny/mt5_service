@@ -4,6 +4,25 @@ source /scripts/02-common.sh
 
 log_message "RUNNING" "04-install-mt5.sh"
 
+# Cleanup any previous failed installations
+log_message "INFO" "Cleaning up any previous failed installations..."
+# Remove partial MT5 installations
+if [ -d "/config/.wine/drive_c/Program Files/MetaTrader 5" ]; then
+    if [ ! -e "$mt5file" ]; then
+        log_message "INFO" "Removing partial MT5 installation..."
+        rm -rf "/config/.wine/drive_c/Program Files/MetaTrader 5" 2>/dev/null || true
+    fi
+fi
+if [ -d "/config/.wine/drive_c/Program Files (x86)/MetaTrader 5" ]; then
+    if [ ! -e "/config/.wine/drive_c/Program Files (x86)/MetaTrader 5/terminal64.exe" ]; then
+        log_message "INFO" "Removing partial MT5 installation (x86)..."
+        rm -rf "/config/.wine/drive_c/Program Files (x86)/MetaTrader 5" 2>/dev/null || true
+    fi
+fi
+# Clean up installer logs and temp files
+rm -f /tmp/mt5_installer.log /tmp/mt5setup.exe 2>/dev/null || true
+log_message "INFO" "Cleanup complete"
+
 # Check if MetaTrader 5 is installed
 if [ -e "$mt5file" ]; then
     log_message "INFO" "File $mt5file already exists."
