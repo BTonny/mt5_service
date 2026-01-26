@@ -18,19 +18,29 @@ else
         log_message "ERROR" "Failed to download MT5 installer."
         exit 1
     fi
-    log_message "INFO" "Installing MetaTrader 5 (this may take 2-3 minutes)..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /auto > /dev/null 2>&1 &
-    INSTALLER_PID=$!
+    log_message "INFO" "Installing MetaTrader 5 (this may take 3-5 minutes)..."
+    log_message "INFO" "⏳ Running installer in background. This will take several minutes..."
     
-    # Wait for installer to complete (max 5 minutes, but log progress)
-    log_message "INFO" "Waiting for MT5 installation to complete (max 5 minutes)..."
-    log_message "INFO" "⏳ This may take 2-5 minutes. Installation is running in background."
+    # Run installer and capture output for debugging
+    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /auto > /tmp/mt5_installer.log 2>&1 &
+    INSTALLER_PID=$!
+    log_message "INFO" "Installer started (PID: $INSTALLER_PID)"
+    
+    # Wait for installer to complete (max 10 minutes)
+    log_message "INFO" "Waiting for MT5 installation to complete (max 10 minutes)..."
     MT5_INSTALLED=0
-    for i in {1..60}; do
+    MAX_WAIT=120  # 10 minutes (120 * 5 seconds)
+    
+    for i in {1..120}; do
         sleep 5
         elapsed=$((i * 5))
         
-        # Check if file exists
+        # Log progress every 30 seconds
+        if [ $((i % 6)) -eq 0 ]; then
+            log_message "INFO" "⏳ MT5 installation in progress... (${elapsed}s / 600s)"
+        fi
+        
+        # Check if file exists in primary location
         if [ -e "$mt5file" ]; then
             log_message "INFO" "✅ MT5 installation completed successfully! (${elapsed}s)"
             MT5_INSTALLED=1
@@ -39,66 +49,105 @@ else
         
         # Check if installer process is still running
         if ! ps -p $INSTALLER_PID > /dev/null 2>&1; then
-            # Installer process finished, check if file exists
-            sleep 5  # Give it a moment to finalize
+            # Installer finished, wait a bit for files to finalize
+            log_message "INFO" "Installer process finished. Verifying installation..."
+            sleep 10
+            
+            # Check primary location
             if [ -e "$mt5file" ]; then
                 log_message "INFO" "✅ MT5 installation completed! (${elapsed}s)"
                 MT5_INSTALLED=1
                 break
+            fi
+            
+            # Search for terminal64.exe in Wine prefix
+            log_message "INFO" "Searching for MT5 installation..."
+            ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
+            if [ -n "$ALTERNATIVE" ]; then
+                log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE (${elapsed}s)"
+                # Update mt5file variable to use found location
+                mt5file="$ALTERNATIVE"
+                MT5_INSTALLED=1
+                break
             else
-                log_message "INFO" "Installer finished, checking for MT5 files..."
-                # Check if installed in different location
+                # Check installer log for errors
+                if grep -i "error\|fail" /tmp/mt5_installer.log 2>/dev/null | head -5; then
+                    log_message "WARN" "Installer log shows errors. Checking..."
+                fi
+                log_message "INFO" "MT5 file not found yet. Waiting a bit longer..."
+                sleep 15
+                # Final check
                 ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
                 if [ -n "$ALTERNATIVE" ]; then
                     log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE (${elapsed}s)"
+                    mt5file="$ALTERNATIVE"
                     MT5_INSTALLED=1
                     break
-                else
-                    # Check if installation is still in progress (files being created)
-                    if find /config/.wine -name "*.exe" -newer /tmp/mt5setup.exe 2>/dev/null | grep -q .; then
-                        log_message "INFO" "⏳ Installation files detected, waiting a bit longer..."
-                        sleep 10
-                        ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
-                        if [ -n "$ALTERNATIVE" ]; then
-                            log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE (${elapsed}s)"
-                            MT5_INSTALLED=1
-                            break
-                        fi
-                    fi
                 fi
-            fi
-        else
-            # Installer still running - log progress
-            if [ $((i % 6)) -eq 0 ]; then
-                log_message "INFO" "⏳ MT5 installation in progress... (${elapsed}s / 300s)"
             fi
         fi
     done
     
+    # Verify installation
     if [ $MT5_INSTALLED -eq 0 ]; then
-        log_message "WARN" "⚠️ MT5 installation not complete after 3 minutes. Continuing anyway..."
-        log_message "WARN" "MT5 will be available later. Flask API will start without MT5 for now."
-        # Don't exit - let Flask start anyway
+        log_message "ERROR" "❌ MT5 installation FAILED after 10 minutes!"
+        log_message "ERROR" "Installer log (last 20 lines):"
+        tail -20 /tmp/mt5_installer.log >> /var/log/mt5_setup.log 2>&1 || true
+        log_message "ERROR" "Searched locations:"
+        log_message "ERROR" "  - $mt5file"
+        log_message "ERROR" "  - /config/.wine/drive_c/Program Files (x86)/MetaTrader 5/terminal64.exe"
+        find /config/.wine -name "*.exe" -type f 2>/dev/null | head -10 >> /var/log/mt5_setup.log || true
+        log_message "ERROR" "Cannot continue without MT5. Exiting..."
+        exit 1
     fi
     
     rm -f /tmp/mt5setup.exe
 fi
 
-# Recheck if MetaTrader 5 is installed
-if [ -e "$mt5file" ]; then
-    log_message "INFO" "✅ File $mt5file is installed. Starting MT5..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable "$mt5file" > /dev/null 2>&1 &
-    log_message "INFO" "MT5 terminal started in background"
-else
-    # Check for alternative location one more time
-    ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
-    if [ -n "$ALTERNATIVE" ]; then
-        log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE. Starting..."
-        WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable "$ALTERNATIVE" > /dev/null 2>&1 &
-        log_message "INFO" "MT5 terminal started in background"
-    else
-        log_message "WARN" "⚠️ MT5 is not installed yet. Flask will start without MT5."
-        log_message "WARN" "MT5 installation may still be in progress. It will be available later."
-        # Don't exit - continue with Flask startup
-    fi
+# Verify MT5 is installed before proceeding
+if [ ! -e "$mt5file" ]; then
+    log_message "ERROR" "❌ MT5 installation verification failed: $mt5file not found"
+    exit 1
 fi
+
+log_message "INFO" "✅ MT5 verified at: $mt5file"
+log_message "INFO" "Starting MT5 terminal..."
+WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable "$mt5file" > /tmp/mt5_terminal.log 2>&1 &
+MT5_PID=$!
+log_message "INFO" "MT5 terminal started (PID: $MT5_PID)"
+
+# Wait for MT5 to initialize (max 2 minutes)
+log_message "INFO" "Waiting for MT5 terminal to initialize..."
+MT5_READY=0
+for i in {1..24}; do
+    sleep 5
+    elapsed=$((i * 5))
+    
+    # Check if MT5 process is still running
+    if ! ps -p $MT5_PID > /dev/null 2>&1; then
+        log_message "WARN" "MT5 process died. Checking logs..."
+        tail -20 /tmp/mt5_terminal.log >> /var/log/mt5_setup.log 2>&1 || true
+        # Try starting again
+        WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable "$mt5file" > /tmp/mt5_terminal.log 2>&1 &
+        MT5_PID=$!
+        log_message "INFO" "Restarted MT5 terminal (PID: $MT5_PID)"
+    fi
+    
+    # Check if MT5 data directory exists (indicates initialization)
+    if [ -d "/config/.wine/drive_c/Program Files/MetaTrader 5/MQL5" ] || [ -d "/config/.wine/drive_c/Program Files (x86)/MetaTrader 5/MQL5" ]; then
+        log_message "INFO" "✅ MT5 terminal initialized successfully! (${elapsed}s)"
+        MT5_READY=1
+        break
+    fi
+    
+    if [ $((i % 6)) -eq 0 ]; then
+        log_message "INFO" "⏳ Waiting for MT5 initialization... (${elapsed}s / 120s)"
+    fi
+done
+
+if [ $MT5_READY -eq 0 ]; then
+    log_message "WARN" "⚠️ MT5 terminal may not be fully initialized, but continuing..."
+    log_message "WARN" "MT5 process is running (PID: $MT5_PID)"
+fi
+
+log_message "INFO" "✅ MT5 installation and startup complete!"

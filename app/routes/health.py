@@ -1,14 +1,7 @@
 from flask import Blueprint, jsonify
 import os
+import MetaTrader5 as mt5
 from flasgger import swag_from
-
-# Try to import MetaTrader5
-try:
-    import MetaTrader5 as mt5
-    MT5_AVAILABLE = True
-except ImportError:
-    mt5 = None
-    MT5_AVAILABLE = False
 
 health_bp = Blueprint('health', __name__)
 
@@ -38,16 +31,10 @@ def health_check():
       200:
         description: Health check successful
     """
-    initialized = False
-    if MT5_AVAILABLE and mt5 is not None:
-        try:
-            initialized = mt5.initialize()
-        except Exception:
-            initialized = False
-    
+    initialized = mt5.initialize()
     return jsonify({
         "status": "healthy",
-        "mt5_connected": MT5_AVAILABLE,
+        "mt5_connected": True,
         "mt5_initialized": initialized
     }), 200
 
