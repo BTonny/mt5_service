@@ -8,43 +8,69 @@ log_message "INFO" "This process will take 5-15 minutes. Progress will be logged
 
 # Start Xvfb virtual display (required for GUI applications in headless environment)
 log_message "INFO" "Starting virtual display (Xvfb)..."
-Xvfb :0 -screen 0 1024x768x24 > /dev/null 2>&1 &
+# Kill any existing Xvfb processes
+pkill -9 Xvfb 2>/dev/null || true
+sleep 1
+
+# Start Xvfb with proper options
+Xvfb :0 -screen 0 1024x768x24 -ac -nolisten tcp +extension GLX +render -noreset > /var/log/xvfb.log 2>&1 &
 XVFB_PID=$!
-sleep 2
+sleep 3
 export DISPLAY=:0
+
+# Verify Xvfb is running and display is accessible
 if ps -p $XVFB_PID > /dev/null 2>&1; then
-    log_message "INFO" "✅ Virtual display started (PID: $XVFB_PID)"
+    # Test if display is accessible
+    if xdpyinfo -display :0 > /dev/null 2>&1; then
+        log_message "INFO" "✅ Virtual display started and accessible (PID: $XVFB_PID)"
+    else
+        log_message "WARN" "⚠️ Xvfb process running but display not accessible yet"
+        sleep 2
+        if xdpyinfo -display :0 > /dev/null 2>&1; then
+            log_message "INFO" "✅ Display now accessible"
+        else
+            log_message "ERROR" "❌ Display not accessible. Check /var/log/xvfb.log"
+        fi
+    fi
 else
-    log_message "WARN" "⚠️ Virtual display may not have started"
+    log_message "ERROR" "❌ Xvfb failed to start. Check /var/log/xvfb.log"
+    cat /var/log/xvfb.log 2>/dev/null || true
 fi
 
-# Start VNC server to allow remote viewing of installation
+# Start VNC server AFTER Xvfb is confirmed working
+# This allows viewing the installation process
 log_message "INFO" "Starting VNC server on port 3000 (accessible externally on port 5900)..."
 VNC_PASSWORD="${VNC_PASSWORD:-P@55word}"
 
-# Create VNC password file using x11vnc's storepasswd
+# Kill any existing x11vnc processes
+pkill -9 x11vnc 2>/dev/null || true
+sleep 1
+
+# Create VNC password file
 mkdir -p ~/.vnc
-echo "$VNC_PASSWORD" | x11vnc -storepasswd - ~/.vnc/passwd 2>/dev/null || {
-    # Fallback: create password file manually if storepasswd fails
-    log_message "WARN" "Using fallback VNC password method..."
-    echo "$VNC_PASSWORD" | vncpasswd -f > ~/.vnc/passwd 2>/dev/null || true
-}
+if command -v x11vnc >/dev/null 2>&1; then
+    echo "$VNC_PASSWORD" | x11vnc -storepasswd - ~/.vnc/passwd 2>/dev/null || {
+        log_message "WARN" "x11vnc storepasswd failed, using direct password"
+    }
+fi
 chmod 600 ~/.vnc/passwd 2>/dev/null || true
 
-# Start x11vnc server (connects to Xvfb display :0)
+# Start x11vnc server with minimal options for better compatibility
 x11vnc -display :0 \
-    -noxrecord \
-    -noxfixes \
-    -noxdamage \
     -forever \
     -shared \
     -rfbport 3000 \
-    -rfbauth ~/.vnc/passwd \
+    -passwd "$VNC_PASSWORD" \
+    -noxrecord \
+    -noxfixes \
+    -noxdamage \
+    -wait 10 \
+    -defer 10 \
     -bg \
     -o /var/log/x11vnc.log \
-    -passwd "$VNC_PASSWORD" 2>&1
+    2>&1
 
-sleep 2
+sleep 3
 
 if pgrep -f "x11vnc" > /dev/null; then
     log_message "INFO" "✅ VNC server started on port 3000 (internal)"
@@ -52,12 +78,14 @@ if pgrep -f "x11vnc" > /dev/null; then
     log_message "INFO" "🔑 VNC Password: $VNC_PASSWORD"
 else
     log_message "WARN" "⚠️ VNC server may not have started (check /var/log/x11vnc.log)"
-    # Try starting without password file (using -passwd directly)
+    # Try simpler startup
     x11vnc -display :0 -forever -shared -rfbport 3000 -passwd "$VNC_PASSWORD" -bg -o /var/log/x11vnc.log 2>&1
-    sleep 1
+    sleep 2
     if pgrep -f "x11vnc" > /dev/null; then
         log_message "INFO" "✅ VNC server started (fallback method)"
-        log_message "INFO" "📺 Connect via VNC client: vnc://your-vps-ip:5900"
+    else
+        log_message "WARN" "⚠️ VNC server failed to start - continuing without VNC"
+        log_message "WARN" "You can still monitor progress via logs: docker logs -f mt5"
     fi
 fi
 

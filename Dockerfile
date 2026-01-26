@@ -33,12 +33,24 @@ RUN dpkg --add-architecture i386
 RUN wget -qO- https://dl.winehq.org/wine-builds/winehq.key | apt-key add - && \
     apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main'
 
-# Install essential system libraries that Wine depends on
+# Install essential system libraries that Wine depends on (both 64-bit and 32-bit)
 RUN apt-get update && apt-get install -y \
     libc6:i386 \
     libncurses5:i386 \
     libstdc++6:i386 \
     libgcc1:i386 \
+    libc6 \
+    libncurses5 \
+    libstdc++6 \
+    libgcc1 \
+    libx11-6:i386 \
+    libx11-6 \
+    libxext6:i386 \
+    libxext6 \
+    libxrender1:i386 \
+    libxrender1 \
+    libfreetype6:i386 \
+    libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Update package lists and install Wine with ALL dependencies
@@ -54,14 +66,14 @@ RUN apt-get update && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Verify Wine installation
+# Verify Wine installation and DLLs
 RUN wine --version && \
     echo "Wine installed successfully" && \
     echo "Wine DLLs location check:" && \
-    (find /usr -type d -name "wine" 2>/dev/null | head -3 || echo "Wine directories found")
-
-# Verify Wine installation (runtime scripts will verify 64-bit)
-RUN wine --version && echo "Wine installed successfully"
+    (find /usr -type d -name "wine" 2>/dev/null | head -5 || echo "Wine directories found") && \
+    echo "Checking for kernel32.dll:" && \
+    (find /usr -name "*kernel32*" -type f 2>/dev/null | head -3 || echo "kernel32 not found in standard locations") && \
+    echo "Wine installation verification complete"
 RUN mkdir -p /app /scripts /config /var/log && \
     chmod 755 /app /scripts /config /var/log
 

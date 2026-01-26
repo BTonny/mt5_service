@@ -86,14 +86,27 @@ fi
 
 # Function to initialize Wine with aggressive timeout and cleanup
 init_wine_with_timeout() {
-    local timeout_seconds=60
+    local timeout_seconds=90
     local log_file="/tmp/wineboot_init.log"
     
     log_message "INFO" "Running wineboot --init (timeout: ${timeout_seconds}s)..."
+    log_message "INFO" "This may take 30-60 seconds. Please wait..."
     
-    # Start wineboot in background with output redirection
+    # Ensure display is accessible
+    if ! xdpyinfo -display :0 > /dev/null 2>&1; then
+        log_message "ERROR" "Display :0 is not accessible. Xvfb may not be running."
+        return 1
+    fi
+    
+    # Start wineboot with explicit environment and error capture
     (
-        WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN wineboot --init 2>&1
+        export WINEARCH=win64
+        export WINEPREFIX=/config/.wine
+        export DISPLAY=:0
+        export WINEDEBUG=-all
+        # Try to suppress kernel32.dll errors by ensuring proper DLL path
+        export WINEDLLPATH=/usr/lib/wine/x86_64-windows:/usr/lib/wine/i386-windows
+        $WINE_BIN wineboot --init 2>&1
     ) > "$log_file" 2>&1 &
     local wineboot_pid=$!
     
@@ -104,6 +117,16 @@ init_wine_with_timeout() {
             # Process finished
             wait $wineboot_pid
             local exit_code=$?
+            
+            # Check for kernel32.dll errors in the log
+            if grep -q "kernel32.dll" "$log_file" 2>/dev/null || grep -q "c0000135" "$log_file" 2>/dev/null; then
+                log_message "ERROR" "Detected kernel32.dll loading failure in wineboot output"
+                log_message "INFO" "This usually indicates missing Wine dependencies or corrupted installation"
+                cat "$log_file" >> /var/log/mt5_setup.log
+                rm -f "$log_file"
+                return 125  # Special exit code for kernel32.dll error
+            fi
+            
             cat "$log_file" >> /var/log/mt5_setup.log
             rm -f "$log_file"
             return $exit_code
@@ -111,7 +134,7 @@ init_wine_with_timeout() {
         
         # Check if system.reg was created (indicates success)
         if [ -f "/config/.wine/system.reg" ]; then
-            log_message "INFO" "Wine initialization appears successful (system.reg created)"
+            log_message "INFO" "✅ Wine initialization successful (system.reg created)"
             kill $wineboot_pid 2>/dev/null || true
             wait $wineboot_pid 2>/dev/null || true
             cat "$log_file" >> /var/log/mt5_setup.log
@@ -119,8 +142,19 @@ init_wine_with_timeout() {
             return 0
         fi
         
+        # Check for errors in log file periodically
+        if [ -f "$log_file" ] && grep -q "kernel32.dll\|c0000135" "$log_file" 2>/dev/null; then
+            log_message "WARN" "Detected kernel32.dll error during initialization..."
+            # Don't return yet, let it try to complete
+        fi
+        
         sleep 2
         elapsed=$((elapsed + 2))
+        
+        # Show progress every 10 seconds
+        if [ $((elapsed % 10)) -eq 0 ]; then
+            log_message "INFO" "Wine initialization in progress... (${elapsed}s/${timeout_seconds}s)"
+        fi
     done
     
     # Timeout reached - kill the process and all Wine processes
@@ -135,6 +169,14 @@ init_wine_with_timeout() {
     pkill -9 wine64 2>/dev/null || true
     sleep 1
     
+    # Check log for kernel32.dll errors
+    if [ -f "$log_file" ] && grep -q "kernel32.dll\|c0000135" "$log_file" 2>/dev/null; then
+        log_message "ERROR" "kernel32.dll error detected in timeout log"
+        cat "$log_file" >> /var/log/mt5_setup.log
+        rm -f "$log_file"
+        return 125  # Special exit code for kernel32.dll error
+    fi
+    
     cat "$log_file" >> /var/log/mt5_setup.log
     rm -f "$log_file"
     
@@ -147,7 +189,56 @@ WINE_INIT_EXIT=$?
 
 # Check if Wine initialization succeeded
 if [ $WINE_INIT_EXIT -ne 0 ] || [ ! -f "/config/.wine/system.reg" ]; then
-    if [ $WINE_INIT_EXIT -eq 124 ]; then
+    if [ $WINE_INIT_EXIT -eq 125 ]; then
+        log_message "ERROR" "kernel32.dll loading failure detected. This is a critical Wine issue."
+        log_message "INFO" "Attempting to fix by checking Wine installation and dependencies..."
+        
+        # Check if Wine DLLs are present
+        log_message "INFO" "Checking Wine DLL installation..."
+        WINE_DLL_DIRS=$(find /usr -type d -name "wine" 2>/dev/null | head -5)
+        if [ -z "$WINE_DLL_DIRS" ]; then
+            log_message "ERROR" "No Wine DLL directories found! Wine installation may be broken."
+            log_message "INFO" "Attempting to reinstall Wine packages..."
+            apt-get update > /dev/null 2>&1
+            apt-get install -y --reinstall --no-install-suggests \
+                winehq-stable \
+                wine-stable \
+                wine-stable-amd64 \
+                wine-stable-i386:i386 \
+                libwine:i386 \
+                libwine \
+            > /dev/null 2>&1 || {
+                log_message "ERROR" "Failed to reinstall Wine packages"
+                exit 1
+            }
+            log_message "INFO" "Wine packages reinstalled. Retrying initialization..."
+        else
+            log_message "INFO" "Wine DLL directories found:"
+            echo "$WINE_DLL_DIRS" | while read dir; do
+                log_message "INFO" "  - $dir"
+            done
+        fi
+        
+        # Clean up and retry
+        rm -rf /config/.wine
+        pkill -9 wineserver 2>/dev/null || true
+        pkill -9 wine 2>/dev/null || true
+        pkill -9 wine64 2>/dev/null || true
+        sleep 2
+        
+        # Retry initialization
+        init_wine_with_timeout
+        WINE_INIT_EXIT=$?
+        
+        if [ $WINE_INIT_EXIT -ne 0 ] || [ ! -f "/config/.wine/system.reg" ]; then
+            log_message "ERROR" "Wine initialization still failing after retry"
+            log_message "ERROR" "This may indicate:"
+            log_message "ERROR" "  1. Wine installation is incomplete or corrupted"
+            log_message "ERROR" "  2. Missing system libraries (check Dockerfile)"
+            log_message "ERROR" "  3. Architecture mismatch (32-bit vs 64-bit libraries)"
+            exit 1
+        fi
+    elif [ $WINE_INIT_EXIT -eq 124 ]; then
         log_message "WARN" "wineboot --init timed out. Attempting fallback initialization method..."
     else
         log_message "WARN" "Wine initialization failed with exit code $WINE_INIT_EXIT. Attempting fallback..."
