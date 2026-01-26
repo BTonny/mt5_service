@@ -5,7 +5,7 @@ services:
     container_name: mt5
     ports:
       - "5001:5001"  # Flask API
-      - "3000:3000"  # VNC (optional, for remote desktop)
+      - "5900:3000"  # VNC (optional, for remote desktop) - external port 5900 maps to internal 3000
     volumes:
       - ./config:/config
     env_file:
@@ -17,6 +17,7 @@ services:
       - WINEPREFIX=/config/.wine
       - XDG_RUNTIME_DIR=/tmp/runtime-root
       - DISPLAY=:0
+      - VNC_PASSWORD=${VNC_PASSWORD:-P@55word}
 
 volumes:
   config:

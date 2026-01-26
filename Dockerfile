@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     dos2unix \
     netcat \
     xvfb \
+    x11vnc \
     && rm -rf /var/lib/apt/lists/*
 
 # Add i386 architecture for Wine dependencies
