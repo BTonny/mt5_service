@@ -1,12 +1,13 @@
 #!/bin/bash
 
-# Source common variables and functions
-source /scripts/02-common.sh
-
 # Fix Wine prefix ownership (in case volume has wrong permissions)
-log_message "INFO" "Fixing Wine prefix ownership..."
 chown -R abc:abc /config/.wine 2>/dev/null || true
 chmod -R 755 /config/.wine 2>/dev/null || true
+
+# Run the startup script as abc user to avoid Wine ownership issues
+runuser -u abc -- /bin/bash << 'EOF'
+# Source common variables and functions
+source /scripts/02-common.sh
 
 # Run installation scripts
 /scripts/03-install-mono.sh
@@ -16,6 +17,7 @@ chmod -R 755 /config/.wine 2>/dev/null || true
 
 # Start servers
 /scripts/07-start-wine-flask.sh
+EOF
 
 # Keep the script running
 tail -f /dev/null

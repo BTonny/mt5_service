@@ -54,6 +54,13 @@ RUN dos2unix /scripts/*.sh && \
     chmod +x /scripts/*.sh
 
 COPY /root /
+
+# Ensure autostart script is executable and will run the startup script
+RUN chmod +x /root/defaults/autostart && \
+    echo '#!/bin/bash' > /etc/cont-init.d/99-start-mt5.sh && \
+    echo 'bash /scripts/01-start.sh &' >> /etc/cont-init.d/99-start-mt5.sh && \
+    chmod +x /etc/cont-init.d/99-start-mt5.sh
+
 RUN touch /var/log/mt5_setup.log && \
     chown abc:abc /var/log/mt5_setup.log && \
     chmod 644 /var/log/mt5_setup.log
