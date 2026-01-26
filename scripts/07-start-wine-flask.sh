@@ -6,19 +6,21 @@ log_message "RUNNING" "07-start-wine-flask.sh"
 
 log_message "INFO" "Starting Flask server in Wine environment..."
 
-# Debug: Log environment variable status
+# Get MT5_API_PORT from the init process environment (PID 1) which has docker-compose env vars
+MT5_API_PORT=$(cat /proc/1/environ 2>/dev/null | tr '\0' '\n' | grep '^MT5_API_PORT=' | cut -d'=' -f2)
+
 if [ -z "$MT5_API_PORT" ]; then
     log_message "ERROR" "MT5_API_PORT environment variable is not set!"
-    log_message "DEBUG" "Available environment variables:"
-    env | grep -i mt5 || log_message "DEBUG" "No MT5_* variables found"
     exit 1
-else
-    log_message "INFO" "MT5_API_PORT is set to: $MT5_API_PORT"
 fi
 
+log_message "INFO" "MT5_API_PORT is set to: $MT5_API_PORT"
+
+# Export it for Wine/Python
+export MT5_API_PORT
+
 # Run the Flask app using Wine's Python
-# Explicitly pass environment variables to Wine to ensure they're available to Python
-MT5_API_PORT="$MT5_API_PORT" wine python /app/app.py &
+wine python /app/app.py &
 
 FLASK_PID=$!
 
