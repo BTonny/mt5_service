@@ -47,60 +47,71 @@ else
     
     log_message "INFO" "Installer file size: $(du -h /tmp/mt5setup.exe | cut -f1)"
     
-    # Try running installer with verbose Wine output to see what's happening
-    log_message "INFO" "Attempting installation (capturing all output)..."
+    # Try running installer - capture only real errors, not trace messages
+    log_message "INFO" "Attempting installation..."
     
-    # Enable Wine debug output temporarily to see errors
-    export WINEDEBUG=+all,+err
+    # Enable Wine debug output for errors only (not trace)
+    export WINEDEBUG=+err,+warn
     
-    # Try with /S flag first (NSIS silent install)
-    log_message "INFO" "Trying with /S flag (silent install)..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /S > /tmp/mt5_installer.log 2>&1 &
-    INSTALLER_PID=$!
-    log_message "INFO" "Installer started (PID: $INSTALLER_PID)"
+    # Try different installer flags - MT5 installer may need specific flags
+    log_message "INFO" "Trying installation with /S flag (silent install)..."
     
-    # Wait and check if it's still running
-    sleep 10
-    if ! ps -p $INSTALLER_PID > /dev/null 2>&1; then
-        log_message "WARN" "Installer finished quickly (10s). Checking output..."
-        if [ -f /tmp/mt5_installer.log ]; then
-            INSTALLER_OUTPUT=$(cat /tmp/mt5_installer.log 2>/dev/null)
-            if [ -n "$INSTALLER_OUTPUT" ]; then
-                log_message "ERROR" "Installer output:"
-                echo "$INSTALLER_OUTPUT" | head -50 | while read line; do
-                    log_message "ERROR" "  $line"
-                done
-            else
-                log_message "ERROR" "Installer log is empty - installer may have failed silently"
-            fi
+    # Run installer and capture exit code
+    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /S > /tmp/mt5_installer.log 2>&1
+    INSTALLER_EXIT=$?
+    
+    log_message "INFO" "Installer exit code: $INSTALLER_EXIT"
+    
+    # Check for actual errors (not trace messages)
+    if [ -f /tmp/mt5_installer.log ]; then
+        # Filter out trace messages and show only real errors/warnings
+        REAL_ERRORS=$(grep -iE "error|fail|exception|warn|cannot|unable|missing" /tmp/mt5_installer.log 2>/dev/null | grep -v "trace:" | head -20)
+        if [ -n "$REAL_ERRORS" ]; then
+            log_message "ERROR" "Installer errors/warnings:"
+            echo "$REAL_ERRORS" | while read line; do
+                log_message "ERROR" "  $line"
+            done
         fi
-        
-        # Try alternative: run synchronously with timeout to capture errors
-        log_message "INFO" "Trying synchronous run to capture errors..."
-        timeout 60 bash -c "WINEARCH=win64 WINEPREFIX=/config/.wine WINEDEBUG=+all,+err $wine_executable /tmp/mt5setup.exe /S" > /tmp/mt5_installer.log 2>&1 || INSTALLER_EXIT=$?
-        
-        if [ -f /tmp/mt5_installer.log ]; then
-            INSTALLER_OUTPUT=$(cat /tmp/mt5_installer.log 2>/dev/null)
-            if [ -n "$INSTALLER_OUTPUT" ]; then
-                log_message "ERROR" "Synchronous installer output:"
-                echo "$INSTALLER_OUTPUT" | head -100 | while read line; do
-                    log_message "ERROR" "  $line"
-                done
-            fi
-        fi
-        
-        # Check if installation actually happened despite errors
-        if [ -e "$mt5file" ]; then
-            log_message "INFO" "✅ MT5 installed despite errors!"
+    fi
+    
+    # Wait a moment for files to be written
+    sleep 5
+    
+    # Check if installation succeeded
+    if [ -e "$mt5file" ]; then
+        log_message "INFO" "✅ MT5 installation completed!"
+        MT5_INSTALLED=1
+    else
+        # Try alternative location
+        ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
+        if [ -n "$ALTERNATIVE" ]; then
+            log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE"
+            mt5file="$ALTERNATIVE"
             MT5_INSTALLED=1
         else
-            log_message "ERROR" "❌ Installation failed. Check logs above for details."
-            log_message "ERROR" "You can manually check: docker exec mt5 cat /tmp/mt5_installer.log"
-            exit 1
+            # Try without /S flag - maybe it needs different flags
+            log_message "WARN" "Installation with /S failed. Trying /auto flag..."
+            WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable /tmp/mt5setup.exe /auto > /tmp/mt5_installer.log 2>&1
+            sleep 10
+            
+            if [ -e "$mt5file" ]; then
+                log_message "INFO" "✅ MT5 installation completed with /auto!"
+                MT5_INSTALLED=1
+            else
+                ALTERNATIVE=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
+                if [ -n "$ALTERNATIVE" ]; then
+                    log_message "INFO" "✅ Found MT5 at: $ALTERNATIVE"
+                    mt5file="$ALTERNATIVE"
+                    MT5_INSTALLED=1
+                else
+                    log_message "ERROR" "❌ Installation failed with both /S and /auto flags"
+                    log_message "ERROR" "Installer exit code: $INSTALLER_EXIT"
+                    log_message "ERROR" "Check installer log: docker exec mt5 cat /tmp/mt5_installer.log"
+                    log_message "ERROR" "Or check for errors: docker exec mt5 grep -iE 'error|fail' /tmp/mt5_installer.log | grep -v trace"
+                    exit 1
+                fi
+            fi
         fi
-    else
-        # Installer is still running, continue with normal wait loop
-        log_message "INFO" "✅ Installer is running. Waiting for completion..."
     fi
     
     # Disable verbose debug output
