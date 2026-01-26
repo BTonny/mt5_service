@@ -4,9 +4,23 @@
 if [ "$(id -u)" -eq 0 ]; then
     chown -R abc:abc /config/.wine 2>/dev/null || true
     chmod -R 755 /config/.wine 2>/dev/null || true
+    
+    # Save environment variables to a file that abc user can read
+    # This works around runuser not preserving env vars
+    env | grep -E '^MT5_|^CUSTOM_|^PASSWORD=|^VNC_DOMAIN=|^API_DOMAIN=' > /tmp/mt5_env.sh 2>/dev/null || true
+    chmod 644 /tmp/mt5_env.sh
+    chown abc:abc /tmp/mt5_env.sh
+    
     # Run as abc user
     exec runuser -u abc -- "$0" "$@"
     exit 0
+fi
+
+# Source environment variables from file if available (when running as abc user)
+if [ -f /tmp/mt5_env.sh ]; then
+    set -a  # Automatically export all variables
+    source /tmp/mt5_env.sh
+    set +a
 fi
 
 # From here, we're running as abc user
