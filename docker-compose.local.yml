@@ -13,6 +13,8 @@ services:
     restart: unless-stopped
     environment:
       - MT5_API_PORT=5001
+      - WINEARCH=win64
+      - WINEPREFIX=/config/.wine
 
 volumes:
   config:

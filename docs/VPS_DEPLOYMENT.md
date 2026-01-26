@@ -1,6 +1,6 @@
 # VPS Deployment Guide
 
-Complete guide for deploying `mt5_btrade` to a Linux VPS (Virtual Private Server).
+Complete guide for deploying `mt5_service` to a Linux VPS (Virtual Private Server).
 
 ## Table of Contents
 
@@ -72,16 +72,27 @@ ssh user@your-vps-ip
 Check if Docker is installed:
 ```bash
 docker --version
-docker-compose --version
+docker compose version  # Modern Docker (v20.10+) uses 'docker compose' (no hyphen)
+# OR
+docker compose --version  # Legacy standalone version
 ```
 
-If not installed (Ubuntu/Debian):
+**Note:** Modern Docker (v20.10+) includes Compose as a plugin. Use `docker compose` (no hyphen) instead of `docker compose`.
+
+If Docker is not installed (Ubuntu/Debian):
 ```bash
 # Update package index
 sudo apt update
 
 # Install Docker
-sudo apt install -y docker.io docker-compose
+sudo apt install -y docker.io
+
+# For Docker Compose (if not included):
+# Option 1: Use built-in plugin (Docker 20.10+)
+docker compose version  # Should work if Docker is recent
+
+# Option 2: Install standalone docker-compose (if needed)
+sudo apt install -y docker-compose
 
 # Start and enable Docker
 sudo systemctl start docker
@@ -95,6 +106,7 @@ sudo usermod -aG docker $USER
 Verify installation:
 ```bash
 docker run hello-world
+docker compose version  # Verify Compose plugin
 ```
 
 ### 3. Firewall Configuration
@@ -131,7 +143,7 @@ sudo ufw status
 **Option A: Using SCP (from your local machine)**
 ```bash
 # From your local machine
-scp -r mt5_btrade/ user@your-vps-ip:/home/user/
+scp -r mt5_service/ user@your-vps-ip:/home/user/
 ```
 
 **Option B: Using Git**
@@ -139,20 +151,20 @@ scp -r mt5_btrade/ user@your-vps-ip:/home/user/
 # On VPS
 cd ~
 git clone your-repo-url
-cd mt5_btrade
+cd mt5_service
 ```
 
 **Option C: Using rsync**
 ```bash
 # From your local machine
-rsync -avz mt5_btrade/ user@your-vps-ip:/home/user/mt5_btrade/
+rsync -avz mt5_service/ user@your-vps-ip:/home/user/mt5_service/
 ```
 
 ### Step 2: Navigate to Project Directory
 
 ```bash
 ssh user@your-vps-ip
-cd ~/mt5_btrade
+cd ~/mt5_service
 ```
 
 ### Step 3: Create Environment File
@@ -194,7 +206,8 @@ docker network create traefik-public
 
 **With Traefik (recommended for production with domain):**
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
+# OR if using standalone: docker compose up -d --build
 ```
 
 **Without Traefik (simpler, direct port access):**
@@ -210,13 +223,13 @@ docker ps
 Check logs:
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # MT5 service only
-docker-compose logs -f mt5
+docker compose logs -f mt5
 
 # Traefik service only (if using)
-docker-compose logs -f traefik
+docker compose logs -f traefik
 ```
 
 Test API endpoint:
@@ -240,7 +253,7 @@ curl http://your-vps-ip:5001/health
    - `api.yourdomain.com` → VPS IP
    - `vnc.yourdomain.com` → VPS IP (optional)
 2. Configure `.env` with domain names
-3. Run `docker-compose up -d`
+3. Run `docker compose up -d`
 
 **Access:**
 - API: `https://api.yourdomain.com`
@@ -254,28 +267,15 @@ curl http://your-vps-ip:5001/health
 - You want quick testing
 - You'll use IP address or set up nginx separately
 
-**Create simplified `docker-compose.simple.yml`:**
-```yaml
-services:
-  mt5:
-    build:
-      dockerfile: Dockerfile
-    container_name: mt5
-    ports:
-      - "5001:5001"  # Flask API
-      - "3000:3000"  # VNC (optional)
-    volumes:
-      - ./config:/config
-    env_file:
-      - .env
-    restart: unless-stopped
-    environment:
-      - MT5_API_PORT=5001
-```
+**Use the included `docker-compose.local.yml` file** (already in the repository):
+- No Traefik required
+- Direct port access (5001 for API, 3000 for VNC)
+- Perfect for quick deployment and testing
 
 **Deploy:**
 ```bash
-docker-compose -f docker-compose.simple.yml up -d --build
+docker compose -f docker-compose.local.yml up -d --build
+# OR if using standalone: docker-compose -f docker-compose.local.yml up -d --build
 ```
 
 **Access:**
@@ -384,7 +384,7 @@ tar -czf mt5-config-backup-$(date +%Y%m%d).tar.gz config/
 
 # Schedule automatic backups (add to crontab)
 crontab -e
-# Add: 0 2 * * * cd /home/user/mt5_btrade && tar -czf ~/backups/mt5-config-$(date +\%Y\%m\%d).tar.gz config/
+# Add: 0 2 * * * cd /home/user/mt5_service && tar -czf ~/backups/mt5-config-$(date +\%Y\%m\%d).tar.gz config/
 ```
 
 ## Integration with backend_btrade
@@ -450,7 +450,7 @@ curl http://your-vps-ip:5001/symbol_info/EURUSD
 docker ps
 
 # Service logs
-docker-compose logs -f mt5
+docker compose logs -f mt5
 
 # Resource usage
 docker stats mt5
@@ -460,25 +460,25 @@ docker stats mt5
 
 ```bash
 # Restart all
-docker-compose restart
+docker compose restart
 
 # Restart specific service
-docker-compose restart mt5
+docker compose restart mt5
 
 # Rebuild and restart
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### Update Application
 
 ```bash
-cd ~/mt5_btrade
+cd ~/mt5_service
 
 # Pull latest changes (if using git)
 git pull
 
 # Rebuild and restart
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### View MT5 Setup Logs
@@ -488,7 +488,7 @@ docker-compose up -d --build
 docker exec -it mt5 cat /var/log/mt5_setup.log
 
 # Or follow logs
-docker-compose logs -f mt5 | grep -i error
+docker compose logs -f mt5 | grep -i error
 ```
 
 ## Troubleshooting
@@ -497,7 +497,7 @@ docker-compose logs -f mt5 | grep -i error
 
 **Check logs:**
 ```bash
-docker-compose logs mt5
+docker compose logs mt5
 ```
 
 **Common causes:**
@@ -521,7 +521,7 @@ docker exec -it mt5 wine --version
 ```bash
 # Remove config and restart
 rm -rf config/
-docker-compose restart mt5
+docker compose restart mt5
 ```
 
 ### Issue: API not accessible from outside
@@ -554,7 +554,7 @@ free -h
 
 **Solutions:**
 - Increase VPS RAM
-- Restart container periodically: `docker-compose restart mt5`
+- Restart container periodically: `docker compose restart mt5`
 - Monitor and optimize MT5 settings
 
 ### Issue: Connection timeout from backend_btrade
@@ -582,7 +582,7 @@ docker ps | grep mt5
 
 **Check Traefik logs:**
 ```bash
-docker-compose logs traefik | grep -i certificate
+docker compose logs traefik | grep -i certificate
 ```
 
 **Verify DNS:**
@@ -599,19 +599,19 @@ docker exec -it traefik certbot renew
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # Stop services
-docker-compose down
+docker compose down
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Restart service
-docker-compose restart mt5
+docker compose restart mt5
 
 # Rebuild after changes
-docker-compose up -d --build
+docker compose up -d --build
 
 # Access container shell
 docker exec -it mt5 bash

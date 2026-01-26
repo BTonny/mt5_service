@@ -1,58 +1,68 @@
-# Stage 1: Base image with apt packages
-FROM ghcr.io/linuxserver/baseimage-kasmvnc:debianbullseye-8446af38-ls104 AS base
+# Use Ubuntu 22.04 LTS - better Wine 64-bit support
+FROM ubuntu:22.04
 
-ENV TITLE=MetaTrader
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Set Wine environment variables BEFORE any Wine operations
 ENV WINEARCH=win64
-ENV WINEPREFIX="/config/.wine"
+ENV WINEPREFIX=/config/.wine
 ENV DISPLAY=:0
+ENV WINEDEBUG=-all
 
-# Ensure the directory exists with correct permissions
-RUN mkdir -p /config/.wine && \
-    chown -R abc:abc /config/.wine && \
-    chmod -R 755 /config/.wine
-
-# Fix problematic backports repository and update package lists
-RUN sed -i '/bullseye-backports/d' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
-    apt-get update && apt-get upgrade -y
-
-# Install required packages
-RUN apt-get install -y \
-    dos2unix \
-    python3-pip \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     wget \
-    python3-pyxdg \
+    gnupg2 \
+    software-properties-common \
+    python3 \
+    python3-pip \
+    dos2unix \
     netcat \
-    && pip3 install --upgrade pip
-
-# Add WineHQ repository key and APT source
-RUN wget -q https://dl.winehq.org/wine-builds/winehq.key > /dev/null 2>&1\
-    && apt-key add winehq.key \
-    && add-apt-repository 'deb https://dl.winehq.org/wine-builds/debian/ bullseye main' \
-    && rm winehq.key
-
-# Add i386 architecture and update package lists
-RUN dpkg --add-architecture i386 \
-    && apt-get update
-
-# Install WineHQ stable package and dependencies
-RUN apt-get install --install-recommends -y \
-    winehq-stable \
-    && apt-get clean \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage 2: Final image
-FROM base
+# Add i386 architecture for Wine dependencies
+RUN dpkg --add-architecture i386
 
-# Copy the scripts directory and convert start.sh to Unix format
+# Add WineHQ repository (Ubuntu 22.04)
+# Use the official WineHQ setup method
+RUN wget -qO- https://dl.winehq.org/wine-builds/winehq.key | apt-key add - && \
+    apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main'
+
+# Update package lists and install Wine
+RUN apt-get update && \
+    apt-get install -y --install-recommends winehq-stable && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify Wine installation (runtime scripts will verify 64-bit)
+RUN wine --version && echo "Wine installed successfully"
+RUN mkdir -p /app /scripts /config /var/log && \
+    chmod 755 /app /scripts /config /var/log
+
+# Copy application files
 COPY app /app
 COPY scripts /scripts
+COPY root /root
+
+# Convert scripts to Unix format and make executable
 RUN dos2unix /scripts/*.sh && \
     chmod +x /scripts/*.sh
 
-COPY /root /
+# Create log file
 RUN touch /var/log/mt5_setup.log && \
-    chown abc:abc /var/log/mt5_setup.log && \
     chmod 644 /var/log/mt5_setup.log
 
+# Expose ports
 EXPOSE 3000 5000 5001 8001 18812
+
+# Volume for Wine configuration
 VOLUME /config
+
+# Set working directory
+WORKDIR /app
+
+# Start script
+CMD ["/scripts/01-start.sh"]

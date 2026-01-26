@@ -4,10 +4,12 @@ source /scripts/02-common.sh
 
 log_message "RUNNING" "07-start-wine-flask.sh"
 
-log_message "INFO" "Starting Flask server in Wine environment..."
+log_message "INFO" "Starting Flask server with Linux Python3..."
 
-# Run the Flask app using Wine's Python
-wine python /app/app.py &
+# Flask app runs with Linux Python3 (not Wine Python)
+# The MetaTrader5 library connects to MT5 terminal running in Wine
+cd /app
+python3 app.py &
 
 FLASK_PID=$!
 

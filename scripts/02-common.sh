@@ -29,3 +29,7 @@ is_python_package_installed() {
 
 # Mute Unnecessary Wine Errors
 export WINEDEBUG=-all,err-toolbar,fixme-all
+
+# CRITICAL: Always set Wine to 64-bit
+export WINEARCH=win64
+export WINEPREFIX=/config/.wine
