@@ -6,10 +6,36 @@ log_message "RUNNING" "07-start-wine-flask.sh"
 
 log_message "INFO" "Starting Flask server in Wine environment..."
 
-# Get MT5_API_PORT from the init process environment (PID 1) which has docker-compose env vars
-MT5_API_PORT=$(cat /proc/1/environ 2>/dev/null | tr '\0' '\n' | grep '^MT5_API_PORT=' | cut -d'=' -f2)
+# Try multiple methods to get MT5_API_PORT
+# Method 1: Check current process environment
+if [ -z "$MT5_API_PORT" ]; then
+    # Method 2: Read from init process (PID 1)
+    MT5_API_PORT=$(cat /proc/1/environ 2>/dev/null | tr '\0' '\n' | grep '^MT5_API_PORT=' | cut -d'=' -f2)
+fi
 
 if [ -z "$MT5_API_PORT" ]; then
+    # Method 3: Read from any process that has it (check a few PIDs)
+    for pid in 1 $(pgrep -f "s6-svscan\|init" | head -1); do
+        if [ -n "$pid" ] && [ -r "/proc/$pid/environ" ]; then
+            MT5_API_PORT=$(cat /proc/$pid/environ 2>/dev/null | tr '\0' '\n' | grep '^MT5_API_PORT=' | cut -d'=' -f2)
+            [ -n "$MT5_API_PORT" ] && break
+        fi
+    done
+fi
+
+if [ -z "$MT5_API_PORT" ]; then
+    # Method 4: Try to read from .env file if mounted (fallback)
+    if [ -f "/config/.env" ]; then
+        MT5_API_PORT=$(grep '^MT5_API_PORT=' /config/.env 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+    fi
+fi
+
+if [ -z "$MT5_API_PORT" ]; then
+    # Debug: Show what we can see
+    log_message "DEBUG" "Checking /proc/1/environ for MT5_API_PORT..."
+    cat /proc/1/environ 2>/dev/null | tr '\0' '\n' | grep -i mt5 || log_message "DEBUG" "No MT5_* variables found in /proc/1/environ"
+    log_message "DEBUG" "Current process environment:"
+    env | grep -i mt5 || log_message "DEBUG" "No MT5_* variables in current env"
     log_message "ERROR" "MT5_API_PORT environment variable is not set!"
     exit 1
 fi
