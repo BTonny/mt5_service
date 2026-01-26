@@ -72,10 +72,11 @@ services:
       traefik.enable: true
       traefik.docker.network: traefik-public
 
-      # Router for vnc.mt5.${domain} (Port 3000)
+      # Router for vnc (Port 3000)
       traefik.http.routers.vnc-mt5-http.rule: Host(`${VNC_DOMAIN}`)
       traefik.http.routers.vnc-mt5-http.entrypoints: http
       traefik.http.routers.vnc-mt5-http.middlewares: https-redirect
+      traefik.http.routers.vnc-mt5-http.service: vnc-mt5-service
 
       traefik.http.routers.vnc-mt5-https.rule: Host(`${VNC_DOMAIN}`)
       traefik.http.routers.vnc-mt5-https.entrypoints: https
@@ -85,10 +86,11 @@ services:
 
       traefik.http.services.vnc-mt5-service.loadbalancer.server.port: 3000
 
-      # Router for api.mt5.${domain} (Port 5001)
+      # Router for api (Port 5001)
       traefik.http.routers.api-mt5-http.rule: Host(`${API_DOMAIN}`)
       traefik.http.routers.api-mt5-http.entrypoints: http
       traefik.http.routers.api-mt5-http.middlewares: https-redirect
+      traefik.http.routers.api-mt5-http.service: api-mt5-service
 
       traefik.http.routers.api-mt5-https.rule: Host(`${API_DOMAIN}`)
       traefik.http.routers.api-mt5-https.entrypoints: https
