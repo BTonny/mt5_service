@@ -57,6 +57,7 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa:i386 \
     libglu1-mesa \
     libasound2:i386 \
+    libasound2-plugins:i386 \
     libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
