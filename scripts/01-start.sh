@@ -4,7 +4,8 @@
 if [ "$(id -u)" -eq 0 ]; then
     chown -R abc:abc /config/.wine 2>/dev/null || true
     chmod -R 755 /config/.wine 2>/dev/null || true
-    # Run as abc user
+    # Run as abc user, preserving environment variables
+    # runuser without -l preserves the current environment
     exec runuser -u abc -- "$0" "$@"
     exit 0
 fi

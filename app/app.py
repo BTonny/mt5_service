@@ -38,4 +38,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 if __name__ == '__main__':
     if not mt5.initialize():
         logger.error("Failed to initialize MT5.")
-    app.run(host='0.0.0.0', port=int(os.environ.get('MT5_API_PORT')))
+    
+    # MT5_API_PORT must be set in environment (via docker-compose env_file)
+    mt5_api_port = os.environ.get('MT5_API_PORT')
+    if not mt5_api_port:
+        raise ValueError("MT5_API_PORT environment variable is required but not set.")
+    
+    app.run(host='0.0.0.0', port=int(mt5_api_port))
