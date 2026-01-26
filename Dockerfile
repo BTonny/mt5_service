@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     netcat \
     xvfb \
     x11vnc \
+    fluxbox \
     && rm -rf /var/lib/apt/lists/*
 
 # Add i386 architecture for Wine dependencies
@@ -51,6 +52,12 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libfreetype6:i386 \
     libfreetype6 \
+    libgl1-mesa-glx:i386 \
+    libgl1-mesa-glx \
+    libglu1-mesa:i386 \
+    libglu1-mesa \
+    libasound2:i386 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Update package lists and install Wine with ALL dependencies

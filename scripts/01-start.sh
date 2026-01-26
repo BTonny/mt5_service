@@ -12,6 +12,10 @@ log_message "INFO" "Starting virtual display (Xvfb)..."
 pkill -9 Xvfb 2>/dev/null || true
 sleep 1
 
+# Remove stale X server lock files
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null || true
+log_message "INFO" "Cleaned up stale X server lock files"
+
 # Start Xvfb with proper options
 Xvfb :0 -screen 0 1024x768x24 -ac -nolisten tcp +extension GLX +render -noreset > /var/log/xvfb.log 2>&1 &
 XVFB_PID=$!
@@ -35,6 +39,25 @@ if ps -p $XVFB_PID > /dev/null 2>&1; then
 else
     log_message "ERROR" "❌ Xvfb failed to start. Check /var/log/xvfb.log"
     cat /var/log/xvfb.log 2>/dev/null || true
+fi
+
+# Start a simple window manager for VNC (so it's not just a black screen)
+log_message "INFO" "Starting window manager for VNC display..."
+# Install fluxbox if not already installed (lightweight window manager)
+if ! command -v fluxbox >/dev/null 2>&1; then
+    log_message "INFO" "Installing fluxbox window manager..."
+    apt-get update -qq && apt-get install -y -qq fluxbox >/dev/null 2>&1 || {
+        log_message "WARN" "Could not install fluxbox, VNC may show black screen"
+    }
+fi
+
+# Start fluxbox in background if available
+if command -v fluxbox >/dev/null 2>&1; then
+    DISPLAY=:0 fluxbox >/var/log/fluxbox.log 2>&1 &
+    sleep 2
+    log_message "INFO" "✅ Window manager started"
+else
+    log_message "WARN" "⚠️ No window manager available - VNC may show black screen"
 fi
 
 # Start VNC server AFTER Xvfb is confirmed working
