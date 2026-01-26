@@ -5,9 +5,12 @@ if [ "$(id -u)" -eq 0 ]; then
     chown -R abc:abc /config/.wine 2>/dev/null || true
     chmod -R 755 /config/.wine 2>/dev/null || true
     # Run as abc user, preserving environment variables
-    # runuser doesn't preserve env vars by default, so we use su with proper flags
-    # su -m preserves the environment, -c runs the command
-    exec su -m abc -c "$0 $@"
+    # Read environment from /proc/1/environ (init process) which has all docker-compose env vars
+    # Convert null-separated env vars to export statements
+    ENV_STRING=$(cat /proc/1/environ 2>/dev/null | tr '\0' '\n' | grep -v '^_' | sed 's/^/export /' | tr '\n' ';')
+    
+    # Execute the script as abc user with all environment variables exported
+    exec runuser -u abc -- bash -c "$ENV_STRING $0 $@"
     exit 0
 fi
 
