@@ -11,8 +11,10 @@ RUN mkdir -p /config/.wine && \
     chown -R abc:abc /config/.wine && \
     chmod -R 755 /config/.wine
 
-# Update package lists and upgrade packages
-RUN apt-get update && apt-get upgrade -y
+# Remove problematic backports repository if it exists and update package lists
+RUN rm -f /etc/apt/sources.list.d/*backports* 2>/dev/null || true && \
+    apt-get update --allow-releaseinfo-change || apt-get update && \
+    apt-get upgrade -y
 
 # Install required packages
 RUN apt-get install -y \
@@ -31,7 +33,8 @@ RUN wget -q https://dl.winehq.org/wine-builds/winehq.key > /dev/null 2>&1\
 
 # Add i386 architecture and update package lists
 RUN dpkg --add-architecture i386 \
-    && apt-get update
+    && rm -f /etc/apt/sources.list.d/*backports* 2>/dev/null || true && \
+    apt-get update --allow-releaseinfo-change || apt-get update
 
 # Install WineHQ stable package and dependencies
 RUN apt-get install --install-recommends -y \
