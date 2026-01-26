@@ -15,6 +15,8 @@ services:
       - MT5_API_PORT=5001
       - WINEARCH=win64
       - WINEPREFIX=/config/.wine
+      - XDG_RUNTIME_DIR=/tmp/runtime-root
+      - DISPLAY=:0
 
 volumes:
   config:

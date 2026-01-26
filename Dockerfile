@@ -9,6 +9,7 @@ ENV TZ=UTC
 ENV WINEARCH=win64
 ENV WINEPREFIX=/config/.wine
 ENV DISPLAY=:0
+ENV XDG_RUNTIME_DIR=/tmp/runtime-root
 ENV WINEDEBUG=-all
 
 # Install system dependencies
