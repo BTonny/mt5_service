@@ -43,26 +43,50 @@ WINE_INIT_EXIT=${PIPESTATUS[0]}
 # Check if Wine initialization succeeded
 if [ $WINE_INIT_EXIT -ne 0 ]; then
     log_message "ERROR" "Wine initialization failed with exit code $WINE_INIT_EXIT"
-    log_message "ERROR" "Checking for Wine installation issues..."
+    log_message "ERROR" "This may be due to missing Wine dependencies or kernel32.dll issues."
     
     # Check if Wine is properly installed
     if ! command -v wine >/dev/null 2>&1 && ! command -v wine64 >/dev/null 2>&1; then
         log_message "ERROR" "Wine binary not found! Wine installation may be broken."
+        log_message "INFO" "Attempting to reinstall Wine dependencies..."
+        apt-get update > /dev/null 2>&1
+        apt-get install -y --reinstall winehq-stable wine-stable wine-stable-amd64 wine-stable-i386:i386 > /dev/null 2>&1 || true
         exit 1
     fi
     
     # Check Wine version
     log_message "INFO" "Wine version: $($WINE_BIN --version 2>&1 || echo 'unknown')"
     
-    # Try a simpler initialization without wineboot
-    log_message "INFO" "Trying alternative Wine initialization method..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f > /dev/null 2>&1
-    
-    # Check if system.reg was created (indicates successful init)
-    if [ ! -f "/config/.wine/system.reg" ]; then
-        log_message "ERROR" "Wine system.reg not created. Wine initialization failed."
-        log_message "ERROR" "This may indicate missing Wine dependencies or Wine installation issues."
-        exit 1
+    # Check for kernel32.dll error specifically
+    if grep -q "kernel32.dll" /var/log/mt5_setup.log 2>/dev/null; then
+        log_message "ERROR" "Detected kernel32.dll loading failure - Wine core DLLs may be missing"
+        log_message "INFO" "Attempting to fix by reinstalling Wine dependencies..."
+        apt-get update > /dev/null 2>&1
+        apt-get install -y --reinstall winehq-stable wine-stable wine-stable-amd64 wine-stable-i386:i386 > /dev/null 2>&1 || true
+        log_message "INFO" "Retrying Wine initialization after dependency reinstall..."
+        
+        # Clean up and retry
+        rm -rf /config/.wine
+        sleep 2
+        timeout 120 bash -c "WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN wineboot --init" 2>&1 | tee -a /var/log/mt5_setup.log
+        WINE_INIT_EXIT=${PIPESTATUS[0]}
+        
+        if [ $WINE_INIT_EXIT -ne 0 ]; then
+            log_message "ERROR" "Wine initialization still failing after dependency reinstall."
+            log_message "ERROR" "This may indicate a deeper system issue. Check Wine installation."
+            exit 1
+        fi
+    else
+        # Try a simpler initialization without wineboot
+        log_message "INFO" "Trying alternative Wine initialization method..."
+        WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f > /dev/null 2>&1
+        
+        # Check if system.reg was created (indicates successful init)
+        if [ ! -f "/config/.wine/system.reg" ]; then
+            log_message "ERROR" "Wine system.reg not created. Wine initialization failed."
+            log_message "ERROR" "This may indicate missing Wine dependencies or Wine installation issues."
+            exit 1
+        fi
     fi
 fi
 

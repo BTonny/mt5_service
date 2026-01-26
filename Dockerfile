@@ -32,10 +32,14 @@ RUN dpkg --add-architecture i386
 RUN wget -qO- https://dl.winehq.org/wine-builds/winehq.key | apt-key add - && \
     apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main'
 
-# Update package lists and install Wine
+# Update package lists and install Wine with all dependencies
 RUN apt-get update && \
-    apt-get install -y --install-recommends winehq-stable && \
-    apt-get clean && \
+    apt-get install -y --install-recommends \
+        winehq-stable \
+        wine-stable \
+        wine-stable-amd64 \
+        wine-stable-i386:i386 \
+    && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Verify Wine installation (runtime scripts will verify 64-bit)
