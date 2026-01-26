@@ -42,7 +42,7 @@ else
     log_message "INFO" "Using wine binary with WINEARCH=win64..."
 fi
 
-# Verify Wine binary works
+# Verify Wine binary works and check for DLLs
 if ! $WINE_BIN --version > /dev/null 2>&1; then
     log_message "ERROR" "Wine binary ($WINE_BIN) is not working. Checking installation..."
     if ! command -v wine >/dev/null 2>&1 && ! command -v wine64 >/dev/null 2>&1; then
@@ -50,6 +50,25 @@ if ! $WINE_BIN --version > /dev/null 2>&1; then
         exit 1
     fi
 fi
+
+# Check for Wine DLLs (kernel32.dll is critical)
+log_message "INFO" "Checking Wine DLL installation..."
+if [ -d "/usr/lib/wine" ] || [ -d "/usr/lib64/wine" ] || [ -d "/usr/lib/i386-linux-gnu/wine" ] || [ -d "/usr/lib/x86_64-linux-gnu/wine" ]; then
+    log_message "INFO" "✅ Wine DLL directories found"
+    # Try to find kernel32 DLL
+    KERNEL32_DLL=$(find /usr -name "*kernel32*" -type f 2>/dev/null | head -1)
+    if [ -n "$KERNEL32_DLL" ]; then
+        log_message "INFO" "Found kernel32 DLL: $KERNEL32_DLL"
+    else
+        log_message "WARN" "kernel32 DLL not found in standard locations (this may cause issues)"
+    fi
+else
+    log_message "WARN" "Wine DLL directories not found in standard locations"
+fi
+
+# Check Wine version and installation
+WINE_VERSION=$($WINE_BIN --version 2>&1 || echo "unknown")
+log_message "INFO" "Wine version: $WINE_VERSION"
 
 # Start wineserver in background to ensure it's available
 log_message "INFO" "Starting wineserver..."
@@ -192,14 +211,53 @@ if [ $WINE_INIT_EXIT -ne 0 ] || [ ! -f "/config/.wine/system.reg" ]; then
         log_message "INFO" "Wine version: $($WINE_BIN --version 2>&1 || echo 'unknown')"
         
         # Check for specific errors in logs
-        if grep -q "kernel32.dll" /var/log/mt5_setup.log 2>/dev/null; then
-            log_message "ERROR" "Detected kernel32.dll loading failure - Wine core DLLs may be missing"
-            log_message "INFO" "This may require Wine dependency reinstallation, but continuing anyway..."
+        if grep -q "kernel32.dll" /var/log/mt5_setup.log 2>/dev/null || grep -q "c0000135" /var/log/mt5_setup.log 2>/dev/null; then
+            log_message "ERROR" "Detected kernel32.dll loading failure (status c0000135) - Wine core DLLs may be missing"
+            log_message "INFO" "Attempting to fix by reinstalling Wine dependencies..."
+            
+            # Try to reinstall Wine packages
+            apt-get update > /dev/null 2>&1
+            apt-get install -y --reinstall --no-install-suggests \
+                winehq-stable \
+                wine-stable \
+                wine-stable-amd64 \
+                wine-stable-i386:i386 \
+                libwine:i386 \
+                libwine \
+            > /dev/null 2>&1 || log_message "WARN" "Could not reinstall Wine packages (may need manual intervention)"
+            
+            log_message "INFO" "Retrying Wine initialization after dependency reinstall..."
+            
+            # Clean up and retry once
+            rm -rf /config/.wine
+            sleep 2
+            
+            # Retry initialization
+            init_wine_with_timeout
+            WINE_INIT_EXIT=$?
+            
+            if [ $WINE_INIT_EXIT -eq 0 ] && [ -f "/config/.wine/system.reg" ]; then
+                log_message "INFO" "✅ Wine initialization succeeded after dependency reinstall"
+                # Success - we can continue, the outer if condition will be false now
+                WINE_INIT_EXIT=0
+            else
+                log_message "ERROR" "Wine initialization still failing after dependency reinstall"
+                log_message "ERROR" "This may indicate a fundamental Wine installation issue or missing system libraries"
+                log_message "ERROR" "Please check: 1) Wine packages are installed, 2) i386 architecture is enabled, 3) All dependencies are present"
+                exit 1
+            fi
+        else
+            # Not a kernel32.dll error, but still failed
+            log_message "ERROR" "Cannot proceed without Wine initialization. Exiting."
+            exit 1
         fi
-        
-        log_message "ERROR" "Cannot proceed without Wine initialization. Exiting."
-        exit 1
     fi
+fi
+
+# Final check - if we're here and system.reg doesn't exist, something went wrong
+if [ ! -f "/config/.wine/system.reg" ]; then
+    log_message "ERROR" "Wine system.reg still not found after all initialization attempts. Exiting."
+    exit 1
 fi
 
 # Wait for Wine to fully initialize

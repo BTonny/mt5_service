@@ -28,19 +28,36 @@ RUN apt-get update && apt-get install -y \
 RUN dpkg --add-architecture i386
 
 # Add WineHQ repository (Ubuntu 22.04)
-# Use the official WineHQ setup method
+# Note: apt-key is deprecated but still works reliably on Ubuntu 22.04
 RUN wget -qO- https://dl.winehq.org/wine-builds/winehq.key | apt-key add - && \
     apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main'
 
-# Update package lists and install Wine with all dependencies
+# Install essential system libraries that Wine depends on
+RUN apt-get update && apt-get install -y \
+    libc6:i386 \
+    libncurses5:i386 \
+    libstdc++6:i386 \
+    libgcc1:i386 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Update package lists and install Wine with ALL dependencies
 RUN apt-get update && \
-    apt-get install -y --install-recommends \
+    apt-get install -y --install-recommends --no-install-suggests \
         winehq-stable \
         wine-stable \
         wine-stable-amd64 \
         wine-stable-i386:i386 \
+        libwine:i386 \
+        libwine \
+        fonts-wine \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Verify Wine installation
+RUN wine --version && \
+    echo "Wine installed successfully" && \
+    echo "Wine DLLs location check:" && \
+    (find /usr -type d -name "wine" 2>/dev/null | head -3 || echo "Wine directories found")
 
 # Verify Wine installation (runtime scripts will verify 64-bit)
 RUN wine --version && echo "Wine installed successfully"
