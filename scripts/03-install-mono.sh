@@ -263,6 +263,16 @@ fi
 # Wait for Wine to fully initialize
 sleep 3
 
+# Configure Wine to bypass anti-debugger detection
+log_message "INFO" "Configuring Wine to bypass anti-debugger detection..."
+WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+# Disable Wine debugger
+WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v "UseDebugger" /t REG_DWORD /d 0 /f > /dev/null 2>&1
+# Hide Wine from debugger detection
+WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $WINE_BIN reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v "UseD3D" /t REG_DWORD /d 0 /f > /dev/null 2>&1
+log_message "INFO" "✅ Anti-debugger bypass configured"
+
 # Verify Wine architecture
 if [ -f "/config/.wine/system.reg" ]; then
     ARCH=$(grep "^#arch" /config/.wine/system.reg | head -1)

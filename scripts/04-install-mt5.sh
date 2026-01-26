@@ -68,13 +68,22 @@ else
     # Try running installer - capture only real errors, not trace messages
     log_message "INFO" "Attempting installation..."
     
-    # Enable Wine debug output for errors only (not trace)
-    export WINEDEBUG=+err,+warn
+    # Enable Wine debug output for errors only (not trace) but disable debugger features
+    export WINEDEBUG=+err,+warn,-all
+    # Disable DLLs that trigger debugger detection
+    export WINEDLLOVERRIDES="dbghelp=n;msvcrt=n;dbgcore=n"
     
-    # Configure Wine to suppress error dialogs (exit code 222 often means user interaction needed)
-    log_message "INFO" "Configuring Wine to suppress error dialogs..."
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
-    WINEARCH=win64 WINEPREFIX=/config/.wine $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    # Configure Wine to suppress error dialogs and bypass anti-debugger detection
+    log_message "INFO" "Configuring Wine to suppress error dialogs and bypass anti-debugger detection..."
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    # Disable Wine debugger completely
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v "UseDebugger" /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    # Hide debug symbols
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v "RelayExclude" /t REG_SZ /d "ntdll;kernel32;kernelbase" /f > /dev/null 2>&1
+    # Disable exception handling that looks like debugger
+    WINEARCH=win64 WINEPREFIX=/config/.wine DISPLAY=:0 $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine\\Debug" /v "RelayDebugLevel" /t REG_DWORD /d 0 /f > /dev/null 2>&1
+    log_message "INFO" "✅ Anti-debugger bypass configured for MT5 installer"
     
     # Try different installer flags - MT5 installer may need specific flags
     log_message "INFO" "Trying installation with /S flag (silent install)..."

@@ -27,8 +27,10 @@ is_python_package_installed() {
     return $?
 }
 
-# Mute Unnecessary Wine Errors
+# Mute Unnecessary Wine Errors and disable debugger-like behavior
 export WINEDEBUG=-all,err-toolbar,fixme-all
+# Disable Wine's debugging features that trigger anti-debugger detection
+export WINEDLLOVERRIDES="dbghelp=n;msvcrt=n"
 
 # CRITICAL: Always set Wine to 64-bit
 export WINEARCH=win64
