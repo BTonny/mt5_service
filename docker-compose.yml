@@ -43,10 +43,11 @@ services:
       - --entrypoints.http.address=:80
       - --entrypoints.https.address=:443
 
-      # Let's Encrypt configuration
+      # Let's Encrypt configuration (using HTTP-01 challenge for nginx proxy compatibility)
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL?Variable not set}
       - --certificatesresolvers.le.acme.storage=/certificates/acme.json
-      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=http
 
       # Logging and API configuration
       - --accesslog
