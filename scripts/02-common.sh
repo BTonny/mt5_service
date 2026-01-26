@@ -29,14 +29,3 @@ is_python_package_installed() {
 
 # Mute Unnecessary Wine Errors
 export WINEDEBUG=-all,err-toolbar,fixme-all
-
-# CRITICAL: Always set Wine to 64-bit
-export WINEARCH=win64
-export WINEPREFIX=/config/.wine
-
-# Suppress XDG_RUNTIME_DIR warnings (harmless but noisy)
-export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/runtime-root}
-export DISPLAY=${DISPLAY:-:0}
-
-# Create XDG_RUNTIME_DIR if it doesn't exist (suppresses Wine warnings)
-mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true

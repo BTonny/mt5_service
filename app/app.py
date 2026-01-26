@@ -36,15 +36,6 @@ app.register_blueprint(error_bp)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 if __name__ == '__main__':
-    # Initialize MT5 - required for the application
     if not mt5.initialize():
-        logger.error("Failed to initialize MT5. Application cannot run without MT5.")
-        logger.error("Please ensure MT5 is installed and running.")
-        exit(1)
-    
-    logger.info("MT5 initialized successfully.")
-    
-    # Start Flask server
-    port = int(os.environ.get('MT5_API_PORT', 5001))
-    logger.info(f"Starting Flask server on port {port}...")
-    app.run(host='0.0.0.0', port=port, debug=False)
+        logger.error("Failed to initialize MT5.")
+    app.run(host='0.0.0.0', port=int(os.environ.get('MT5_API_PORT')))

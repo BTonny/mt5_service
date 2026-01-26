@@ -4,7 +4,7 @@ A Docker-based REST API service that provides programmatic access to MetaTrader 
 
 ## Table of Contents
 
-- [mt5_service - MetaTrader 5 Trading Service](#mt5_service---metatrader-5-trading-service)
+- [MT5 Service - MetaTrader 5 Trading Service](#mt5-service---metatrader-5-trading-service)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Features](#features)
@@ -12,16 +12,24 @@ A Docker-based REST API service that provides programmatic access to MetaTrader 
   - [Prerequisites](#prerequisites)
   - [Quick Start](#quick-start)
   - [Installation](#installation)
+    - [Local Development](#local-development)
+    - [VPS Deployment](#vps-deployment)
   - [Configuration](#configuration)
     - [Environment Variables](#environment-variables)
     - [Docker Compose Services](#docker-compose-services)
     - [Volumes](#volumes)
   - [Usage](#usage)
+    - [API Endpoints](#api-endpoints)
+    - [Accessing Services](#accessing-services)
+    - [Managing Services](#managing-services)
   - [API Documentation](#api-documentation)
   - [Deployment](#deployment)
+    - [Local Development](#local-development-1)
+    - [VPS Deployment (Production)](#vps-deployment-production)
   - [API Integration](#api-integration)
   - [Logging](#logging)
   - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
   - [License](#license)
 
 ## Overview

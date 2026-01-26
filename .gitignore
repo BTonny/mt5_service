@@ -53,3 +53,4 @@ docker-compose.override.yml
 *.key
 *.crt
 *.cert
+.aalocal
