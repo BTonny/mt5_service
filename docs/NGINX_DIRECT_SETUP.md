@@ -8,13 +8,31 @@ With this setup, nginx directly handles:
 - Domain routing (api.mt5.bawembye.com, vnc.mt5.bawembye.com)
 - SSL/TLS certificates (via certbot/Let's Encrypt)
 - HTTP to HTTPS redirects
-- Reverse proxying to Flask API (port 5001) and VNC (port 3000)
+- Reverse proxying to Flask API (port 5002) and VNC (port 3001)
 
 ## Prerequisites
 
-- Docker containers running with ports 5001 and 3000 exposed
+- Docker containers running with ports 5002 (API) and 3001 (VNC) exposed on the host
 - DNS records pointing to your VPS IP
 - Certbot installed: `sudo apt install certbot python3-certbot-nginx`
+
+## Check for Port Conflicts
+
+Before starting, check if ports 5002 and 3001 are already in use:
+
+```bash
+# Check if ports are in use
+sudo lsof -i :5002
+sudo lsof -i :3001
+
+# Or using ss
+ss -tlnp | grep -E ":5002|:3001"
+
+# Or using netstat (if installed)
+netstat -tlnp | grep -E ":5002|:3001"
+```
+
+**Note:** We use ports 5002 (API) and 3001 (VNC) on the host to avoid conflicts with common services. The containers still use 5001 and 3000 internally.
 
 ## Step 1: Install Certbot
 
@@ -34,7 +52,7 @@ server {
     server_name api.mt5.bawembye.com;
     
     location / {
-        proxy_pass http://localhost:5001;
+        proxy_pass http://localhost:5002;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -53,7 +71,7 @@ server {
     server_name vnc.mt5.bawembye.com;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -143,7 +161,7 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     
     location / {
-        proxy_pass http://localhost:5001;
+        proxy_pass http://localhost:5002;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -172,7 +190,7 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3001;  # Change if using custom MT5_VNC_PORT
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -195,10 +213,10 @@ server {
 
 ```bash
 # Test API
-curl http://localhost:5001/health
+curl http://localhost:5002/health
 
 # Test VNC (should return HTML)
-curl http://localhost:3000
+curl http://localhost:3001
 ```
 
 ### Check nginx logs

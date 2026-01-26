@@ -4,8 +4,8 @@ services:
       dockerfile: Dockerfile
     container_name: mt5
     ports:
-      - "5001:5001" # Flask API port
-      - "3000:3000" # VNC port
+      - "5002:5001" # Flask API port (host:container)
+      - "3001:3000" # VNC port (host:container)
     volumes:
       - ./config:/config
     networks:
