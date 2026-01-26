@@ -11,9 +11,10 @@ RUN mkdir -p /config/.wine && \
     chown -R abc:abc /config/.wine && \
     chmod -R 755 /config/.wine
 
-# Remove problematic backports repository if it exists and update package lists
-RUN rm -f /etc/apt/sources.list.d/*backports* 2>/dev/null || true && \
-    apt-get update --allow-releaseinfo-change || apt-get update && \
+# Disable problematic backports repository and update package lists
+RUN sed -i 's/^[^#].*bullseye-backports/#&/' /etc/apt/sources.list 2>/dev/null || true && \
+    find /etc/apt/sources.list.d/ -type f -exec sed -i 's/^[^#].*bullseye-backports/#&/' {} \; 2>/dev/null || true && \
+    apt-get update && \
     apt-get upgrade -y
 
 # Install required packages
@@ -33,8 +34,9 @@ RUN wget -q https://dl.winehq.org/wine-builds/winehq.key > /dev/null 2>&1\
 
 # Add i386 architecture and update package lists
 RUN dpkg --add-architecture i386 \
-    && rm -f /etc/apt/sources.list.d/*backports* 2>/dev/null || true && \
-    apt-get update --allow-releaseinfo-change || apt-get update
+    && sed -i 's/^[^#].*bullseye-backports/#&/' /etc/apt/sources.list 2>/dev/null || true && \
+    find /etc/apt/sources.list.d/ -type f -exec sed -i 's/^[^#].*bullseye-backports/#&/' {} \; 2>/dev/null || true && \
+    apt-get update
 
 # Install WineHQ stable package and dependencies
 RUN apt-get install --install-recommends -y \
