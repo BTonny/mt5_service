@@ -729,50 +729,28 @@ def get_terminal_info():
     {
       "ticket": 123456789,
       "time_setup": "2024-01-01T12:00:00Z",
+      "time_setup_msc": 1704110400000,
+      "time_done": 0,
+      "time_done_msc": 0,
+      "time_expiration": 0,
+      "time_expiration_msc": 0,
       "type": 2,
       "type_time": 0,
       "type_filling": 2,
       "volume_initial": 0.1,
       "volume_current": 0.1,
       "price_open": 1.1000,
-      "sl": 1.0950,
-      "tp": 1.1100,
       "price_current": 1.1005,
       "price_stoplimit": 0.0,
+      "sl": 1.0950,
+      "tp": 1.1100,
       "symbol": "EURUSD",
       "comment": "",
       "magic": 400000,
-      "time_expiration": 0,
-      "time_done": 0,
-      "time_setup_msc": 1704110400000,
-      "time_done_msc": 0,
-      "time_expiration_msc": 0,
-      "type_filling": 2,
-      "type_time": 0,
-      "reason": 3,
-      "state": 1,
-      "volume_initial": 0.1,
-      "volume_current": 0.1,
-      "price_open": 1.1000,
-      "price_current": 1.1005,
-      "price_stoplimit": 0.0,
-      "sl": 1.0950,
-      "tp": 1.1100,
-      "time_setup": 1704110400,
-      "time_expiration": 0,
-      "time_done": 0,
-      "time_setup_msc": 1704110400000,
-      "time_done_msc": 0,
-      "time_expiration_msc": 0,
-      "type": 2,
-      "type_filling": 2,
-      "type_time": 0,
-      "reason": 3,
-      "state": 1,
-      "magic": 400000,
       "position_id": 0,
       "position_by_id": 0,
-      "comment": "",
+      "reason": 3,
+      "state": 1,
       "external_id": ""
     }
   ],
@@ -1440,12 +1418,17 @@ def history_orders_get_endpoint():
 
 **Route**: `GET /fetch_data_pos`
 
-**Description**: Retrieve historical price data for a given symbol starting from a specific position (using `copy_rates_from_pos`). Useful for getting data relative to a position's entry point.
+**Description**: Retrieve historical price data for a given symbol starting from a specific bar position (using `copy_rates_from_pos`). The function fetches bars starting from the most recent bar (position 0) going backwards. Note: The "position" parameter refers to bar index in the chart, not a trading position ticket.
 
 **Query Parameters**:
 - `symbol` (required): Symbol name
 - `timeframe` (optional): Timeframe (M1, M5, H1, etc.), default: M1
 - `num_bars` (optional): Number of bars to fetch, default: 100
+
+**Note**: The `copy_rates_from_pos` function uses `start_pos` as a bar index:
+- `0` = most recent bar (current bar)
+- `1` = one bar back
+- `2` = two bars back, etc.
 
 **Response Schema**:
 ```json
@@ -1529,9 +1512,9 @@ def history_orders_get_endpoint():
 })
 def fetch_data_pos_endpoint():
     """
-    Fetch Data from Position
+    Fetch Data from Bar Position
     ---
-    description: Retrieve historical price data for a given symbol starting from a specific position.
+    description: Retrieve historical price data for a given symbol starting from a specific bar position (0 = most recent bar, going backwards).
     """
     try:
         symbol = request.args.get('symbol')
@@ -1558,7 +1541,8 @@ def fetch_data_pos_endpoint():
         if mt5_timeframe is None:
             return jsonify({"error": f"Invalid timeframe: {timeframe}"}), 400
         
-        # Fetch data from position (0 = current position)
+        # Fetch data from bar position (0 = most recent bar, going backwards)
+        # Note: start_pos is the bar index, not a trading position ticket
         rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, num_bars)
         if rates is None:
             error_code, error_str = mt5.last_error()
@@ -1722,7 +1706,7 @@ def fetch_data_range_endpoint():
 
         # Convert string dates to datetime objects
         from datetime import datetime
-        import pytz
+        import pytz  # Note: pytz is already in requirements.txt
         utc = pytz.UTC
         start_date = utc.localize(datetime.fromisoformat(start_str.replace('Z', '+00:00')))
         end_date = utc.localize(datetime.fromisoformat(end_str.replace('Z', '+00:00')))
