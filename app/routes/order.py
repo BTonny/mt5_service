@@ -3,6 +3,7 @@ import MetaTrader5 as mt5
 import logging
 from flasgger import swag_from
 from datetime import datetime
+import pytz
 
 order_bp = Blueprint('order', __name__)
 logger = logging.getLogger(__name__)
@@ -152,6 +153,9 @@ def send_order_endpoint():
         if 'expiration' in data and is_pending_order:
             try:
                 expiration = datetime.fromisoformat(data['expiration'].replace('Z', '+00:00'))
+                # Ensure timezone-aware (if naive, assume UTC)
+                if expiration.tzinfo is None:
+                    expiration = pytz.UTC.localize(expiration)
                 request_data["expiration"] = expiration
             except ValueError:
                 return jsonify({"error": "Invalid expiration format. Use ISO 8601 format"}), 400

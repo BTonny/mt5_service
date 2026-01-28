@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 import MetaTrader5 as mt5
 import logging
 from datetime import datetime
+import pytz
 from flasgger import swag_from
 
 history_bp = Blueprint('history', __name__)
@@ -229,11 +230,21 @@ def history_deals_get_endpoint():
         if not all([from_date, to_date]):
             return jsonify({"error": "from_date and to_date parameters are required"}), 400
         
-        from_date = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
-        to_date = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
-        
-        from_timestamp = int(from_date.timestamp())
-        to_timestamp = int(to_date.timestamp())
+        # Parse dates and ensure timezone awareness
+        try:
+            from_date_parsed = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
+            to_date_parsed = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
+            
+            # Ensure timezone-aware (if naive, assume UTC)
+            if from_date_parsed.tzinfo is None:
+                from_date_parsed = pytz.UTC.localize(from_date_parsed)
+            if to_date_parsed.tzinfo is None:
+                to_date_parsed = pytz.UTC.localize(to_date_parsed)
+            
+            from_timestamp = int(from_date_parsed.timestamp())
+            to_timestamp = int(to_date_parsed.timestamp())
+        except ValueError as ve:
+            return jsonify({"error": f"Invalid date format: {str(ve)}"}), 400
         
         # Get deals with optional position filter
         if position:
