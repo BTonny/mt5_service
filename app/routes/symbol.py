@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 import MetaTrader5 as mt5
 from flasgger import swag_from
 import logging
@@ -99,3 +99,77 @@ def get_symbol_info(symbol):
     
     symbol_info_dict = symbol_info._asdict()
     return jsonify(symbol_info_dict)
+
+@symbol_bp.route('/symbol_select/<symbol>', methods=['POST'])
+@swag_from({
+    'tags': ['Symbol'],
+    'parameters': [
+        {
+            'name': 'symbol',
+            'in': 'path',
+            'type': 'string',
+            'required': True,
+            'description': 'Symbol name to select.'
+        },
+        {
+            'name': 'body',
+            'in': 'body',
+            'required': False,
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'enable': {'type': 'boolean', 'default': True}
+                }
+            }
+        }
+    ],
+    'responses': {
+        200: {
+            'description': 'Symbol selection status.',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'message': {'type': 'string'},
+                    'symbol': {'type': 'string'},
+                    'selected': {'type': 'boolean'}
+                }
+            }
+        },
+        400: {
+            'description': 'Failed to select symbol.'
+        },
+        500: {
+            'description': 'Internal server error.'
+        }
+    }
+})
+def symbol_select_endpoint(symbol):
+    """
+    Select Symbol
+    ---
+    description: Select/enable a symbol in the Market Watch window.
+    """
+    try:
+        data = request.get_json() or {}
+        enable = data.get('enable', True)
+        
+        result = mt5.symbol_select(symbol, enable)
+        
+        if not result:
+            error_code, error_str = mt5.last_error()
+            return jsonify({
+                "error": f"Failed to select symbol {symbol}",
+                "mt5_error": error_str,
+                "error_code": error_code
+            }), 400
+        
+        action = "selected" if enable else "deselected"
+        return jsonify({
+            "message": f"Symbol {action} successfully",
+            "symbol": symbol,
+            "selected": result
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error in symbol_select: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500

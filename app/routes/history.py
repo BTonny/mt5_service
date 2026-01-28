@@ -3,7 +3,6 @@ import MetaTrader5 as mt5
 import logging
 from datetime import datetime
 from flasgger import swag_from
-from lib import get_deal_from_ticket, get_order_from_ticket
 
 history_bp = Blueprint('history', __name__)
 logger = logging.getLogger(__name__)
@@ -64,11 +63,23 @@ def get_deal_from_ticket_endpoint():
             return jsonify({"error": "Ticket parameter is required"}), 400
         
         ticket = int(ticket)
-        deal = get_deal_from_ticket(ticket)
-        if deal is None:
+        
+        # Get deal by ticket
+        deals = mt5.history_deals_get(ticket=ticket)
+        if deals is None or len(deals) == 0:
             return jsonify({"error": "Failed to get deal information"}), 404
         
-        return jsonify(deal)
+        # Process deal data
+        deal = deals[0]
+        deal_dict = deal._asdict()
+        
+        # Convert timestamps to ISO format
+        if 'time' in deal_dict and deal_dict['time'] > 0:
+            deal_dict['time'] = datetime.fromtimestamp(
+                deal_dict['time'], tz=mt5.TIMEZONE
+            ).isoformat()
+        
+        return jsonify(deal_dict), 200
     
     except ValueError:
         return jsonify({"error": "Invalid ticket format"}), 400
@@ -122,11 +133,31 @@ def get_order_from_ticket_endpoint():
             return jsonify({"error": "Ticket parameter is required"}), 400
         
         ticket = int(ticket)
-        order = get_order_from_ticket(ticket)
-        if order is None:
+        
+        # Get order by ticket
+        orders = mt5.history_orders_get(ticket=ticket)
+        if orders is None or len(orders) == 0:
             return jsonify({"error": "Failed to get order information"}), 404
         
-        return jsonify(order)
+        # Process order data
+        order = orders[0]
+        order_dict = order._asdict()
+        
+        # Convert timestamps to ISO format
+        if 'time_setup' in order_dict and order_dict['time_setup'] > 0:
+            order_dict['time_setup'] = datetime.fromtimestamp(
+                order_dict['time_setup'], tz=mt5.TIMEZONE
+            ).isoformat()
+        if 'time_expiration' in order_dict and order_dict['time_expiration'] > 0:
+            order_dict['time_expiration'] = datetime.fromtimestamp(
+                order_dict['time_expiration'], tz=mt5.TIMEZONE
+            ).isoformat()
+        if 'time_done' in order_dict and order_dict['time_done'] > 0:
+            order_dict['time_done'] = datetime.fromtimestamp(
+                order_dict['time_done'], tz=mt5.TIMEZONE
+            ).isoformat()
+        
+        return jsonify(order_dict), 200
     
     except ValueError:
         return jsonify({"error": "Invalid ticket format"}), 400
@@ -158,8 +189,8 @@ def get_order_from_ticket_endpoint():
             'name': 'position',
             'in': 'query',
             'type': 'integer',
-            'required': True,
-            'description': 'Position number to filter deals.'
+            'required': False,
+            'description': 'Position ID to filter deals.'
         }
     ],
     'responses': {
@@ -188,29 +219,46 @@ def history_deals_get_endpoint():
     """
     Get Deals History
     ---
-    description: Retrieve historical deals within a specified date range for a particular position.
+    description: Retrieve historical deals within a specified date range, optionally filtered by position.
     """
     try:
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
         position = request.args.get('position')
         
-        if not all([from_date, to_date, position]):
-            return jsonify({"error": "from_date, to_date, and position parameters are required"}), 400
+        if not all([from_date, to_date]):
+            return jsonify({"error": "from_date and to_date parameters are required"}), 400
         
         from_date = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
         to_date = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
-        position = int(position)
-
+        
         from_timestamp = int(from_date.timestamp())
         to_timestamp = int(to_date.timestamp())
-        deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+        
+        # Get deals with optional position filter
+        if position:
+            position = int(position)
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+        else:
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp)
         
         if deals is None:
             return jsonify({"error": "Failed to get deals history"}), 404
         
+        # Convert to list of dictionaries
         deals_list = [deal._asdict() for deal in deals]
-        return jsonify(deals_list)
+        
+        # Convert timestamps to ISO format
+        for deal_dict in deals_list:
+            if 'time' in deal_dict and deal_dict['time'] > 0:
+                deal_dict['time'] = datetime.fromtimestamp(
+                    deal_dict['time'], tz=mt5.TIMEZONE
+                ).isoformat()
+        
+        return jsonify({
+            "deals": deals_list,
+            "total": len(deals_list)
+        }), 200
     
     except ValueError:
         return jsonify({"error": "Invalid parameter format"}), 400
@@ -226,7 +274,7 @@ def history_deals_get_endpoint():
             'name': 'ticket',
             'in': 'query',
             'type': 'integer',
-            'required': True,
+            'required': False,
             'description': 'Ticket number to retrieve orders history.'
         }
     ],
@@ -256,20 +304,42 @@ def history_orders_get_endpoint():
     """
     Get Orders History
     ---
-    description: Retrieve historical orders associated with a specific ticket number.
+    description: Retrieve historical orders, optionally filtered by ticket.
     """
     try:
-        ticket = request.args.get('ticket')
-        if not ticket:
-            return jsonify({"error": "Ticket parameter is required"}), 400
+        ticket = request.args.get('ticket', type=int)
         
-        ticket = int(ticket)
-        orders = mt5.history_orders_get(ticket=ticket)
+        # Get orders with optional ticket filter
+        if ticket:
+            orders = mt5.history_orders_get(ticket=ticket)
+        else:
+            orders = mt5.history_orders_get()
+        
         if orders is None:
             return jsonify({"error": "Failed to get orders history"}), 404
         
+        # Convert to list of dictionaries
         orders_list = [order._asdict() for order in orders]
-        return jsonify(orders_list)
+        
+        # Convert timestamps to ISO format
+        for order_dict in orders_list:
+            if 'time_setup' in order_dict and order_dict['time_setup'] > 0:
+                order_dict['time_setup'] = datetime.fromtimestamp(
+                    order_dict['time_setup'], tz=mt5.TIMEZONE
+                ).isoformat()
+            if 'time_expiration' in order_dict and order_dict['time_expiration'] > 0:
+                order_dict['time_expiration'] = datetime.fromtimestamp(
+                    order_dict['time_expiration'], tz=mt5.TIMEZONE
+                ).isoformat()
+            if 'time_done' in order_dict and order_dict['time_done'] > 0:
+                order_dict['time_done'] = datetime.fromtimestamp(
+                    order_dict['time_done'], tz=mt5.TIMEZONE
+                ).isoformat()
+        
+        return jsonify({
+            "orders": orders_list,
+            "total": len(orders_list)
+        }), 200
     
     except ValueError:
         return jsonify({"error": "Invalid ticket format"}), 400

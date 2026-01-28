@@ -227,8 +227,13 @@ def modify_sl_tp_endpoint():
         }
         
         result = mt5.order_send(request_data)
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            return jsonify({"error": f"Failed to modify SL/TP: {result.comment}"}), 400
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            error_code, error_str = mt5.last_error()
+            error_message = result.comment if result else "MT5 order_send returned None"
+            return jsonify({
+                "error": f"Failed to modify SL/TP: {error_message}",
+                "mt5_error": error_str
+            }), 400
         
         return jsonify({"message": "SL/TP modified successfully", "result": result._asdict()})
     
