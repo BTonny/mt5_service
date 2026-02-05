@@ -77,7 +77,7 @@ def get_deal_from_ticket_endpoint():
         # Convert timestamps to ISO format
         if 'time' in deal_dict and deal_dict['time'] > 0:
             deal_dict['time'] = datetime.fromtimestamp(
-                deal_dict['time'], tz=mt5.TIMEZONE
+                deal_dict['time'], tz=pytz.UTC
             ).isoformat()
         
         return jsonify(deal_dict), 200
@@ -147,15 +147,15 @@ def get_order_from_ticket_endpoint():
         # Convert timestamps to ISO format
         if 'time_setup' in order_dict and order_dict['time_setup'] > 0:
             order_dict['time_setup'] = datetime.fromtimestamp(
-                order_dict['time_setup'], tz=mt5.TIMEZONE
+                order_dict['time_setup'], tz=pytz.UTC
             ).isoformat()
         if 'time_expiration' in order_dict and order_dict['time_expiration'] > 0:
             order_dict['time_expiration'] = datetime.fromtimestamp(
-                order_dict['time_expiration'], tz=mt5.TIMEZONE
+                order_dict['time_expiration'], tz=pytz.UTC
             ).isoformat()
         if 'time_done' in order_dict and order_dict['time_done'] > 0:
             order_dict['time_done'] = datetime.fromtimestamp(
-                order_dict['time_done'], tz=mt5.TIMEZONE
+                order_dict['time_done'], tz=pytz.UTC
             ).isoformat()
         
         return jsonify(order_dict), 200
@@ -263,7 +263,7 @@ def history_deals_get_endpoint():
         for deal_dict in deals_list:
             if 'time' in deal_dict and deal_dict['time'] > 0:
                 deal_dict['time'] = datetime.fromtimestamp(
-                    deal_dict['time'], tz=mt5.TIMEZONE
+                    deal_dict['time'], tz=pytz.UTC
                 ).isoformat()
         
         return jsonify({
@@ -336,15 +336,15 @@ def history_orders_get_endpoint():
         for order_dict in orders_list:
             if 'time_setup' in order_dict and order_dict['time_setup'] > 0:
                 order_dict['time_setup'] = datetime.fromtimestamp(
-                    order_dict['time_setup'], tz=mt5.TIMEZONE
+                    order_dict['time_setup'], tz=pytz.UTC
                 ).isoformat()
             if 'time_expiration' in order_dict and order_dict['time_expiration'] > 0:
                 order_dict['time_expiration'] = datetime.fromtimestamp(
-                    order_dict['time_expiration'], tz=mt5.TIMEZONE
+                    order_dict['time_expiration'], tz=pytz.UTC
                 ).isoformat()
             if 'time_done' in order_dict and order_dict['time_done'] > 0:
                 order_dict['time_done'] = datetime.fromtimestamp(
-                    order_dict['time_done'], tz=mt5.TIMEZONE
+                    order_dict['time_done'], tz=pytz.UTC
                 ).isoformat()
         
         return jsonify({

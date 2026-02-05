@@ -343,15 +343,15 @@ def get_orders_endpoint():
         for order_dict in orders_list:
             if 'time_setup' in order_dict and order_dict['time_setup'] > 0:
                 order_dict['time_setup'] = datetime.fromtimestamp(
-                    order_dict['time_setup'], tz=mt5.TIMEZONE
+                    order_dict['time_setup'], tz=pytz.UTC
                 ).isoformat()
             if 'time_expiration' in order_dict and order_dict['time_expiration'] > 0:
                 order_dict['time_expiration'] = datetime.fromtimestamp(
-                    order_dict['time_expiration'], tz=mt5.TIMEZONE
+                    order_dict['time_expiration'], tz=pytz.UTC
                 ).isoformat()
             if 'time_done' in order_dict and order_dict['time_done'] > 0:
                 order_dict['time_done'] = datetime.fromtimestamp(
-                    order_dict['time_done'], tz=mt5.TIMEZONE
+                    order_dict['time_done'], tz=pytz.UTC
                 ).isoformat()
         
         return jsonify({
