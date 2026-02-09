@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
                             'volume': {'type': 'number'}
                         },
                         'required': ['type', 'ticket', 'symbol', 'volume']
+                    },
+                    'type_filling': {
+                        'type': 'string',
+                        'enum': ['ORDER_FILLING_IOC', 'ORDER_FILLING_FOK', 'ORDER_FILLING_RETURN'],
+                        'description': 'Optional. Order filling mode. If omitted, the service uses the symbol\'s allowed mode (recommended). Override only when you need a specific mode.'
                     }
                 },
                 'required': ['position']
@@ -66,14 +71,27 @@ def close_position_endpoint():
     """
     Close a Specific Position
     ---
-    description: Close a specific trading position based on the provided position data.
+    description: Close a specific trading position based on the provided position data. Filling mode is auto-detected from the symbol unless type_filling is provided.
     """
     try:
         data = request.get_json()
         if not data or 'position' not in data:
             return jsonify({"error": "Position data is required"}), 400
-        
-        result = close_position(data['position'])
+
+        type_filling = None
+        if 'type_filling' in data and data['type_filling']:
+            type_filling_map = {
+                'ORDER_FILLING_IOC': mt5.ORDER_FILLING_IOC,
+                'ORDER_FILLING_FOK': mt5.ORDER_FILLING_FOK,
+                'ORDER_FILLING_RETURN': mt5.ORDER_FILLING_RETURN,
+            }
+            tf_str = data['type_filling'].strip().upper()
+            if tf_str in type_filling_map:
+                type_filling = type_filling_map[tf_str]
+            else:
+                return jsonify({"error": "Invalid type_filling. Use ORDER_FILLING_IOC, ORDER_FILLING_FOK, or ORDER_FILLING_RETURN."}), 400
+
+        result = close_position(data['position'], type_filling=type_filling)
         if result is None:
             return jsonify({"error": "Failed to close position"}), 400
         

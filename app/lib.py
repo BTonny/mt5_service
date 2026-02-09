@@ -8,6 +8,26 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# SYMBOL_FILLING_* (bitmask) → ORDER_FILLING_* for order_send (broker-dependent)
+_SYMBOL_TO_ORDER_FILLING = (
+    (getattr(mt5, 'SYMBOL_FILLING_RETURN', 4), mt5.ORDER_FILLING_RETURN),
+    (getattr(mt5, 'SYMBOL_FILLING_IOC', 2), mt5.ORDER_FILLING_IOC),
+    (getattr(mt5, 'SYMBOL_FILLING_FOK', 1), mt5.ORDER_FILLING_FOK),
+)
+
+
+def _get_symbol_filling_mode(symbol):
+    """Return ORDER_FILLING_* supported by the symbol (from symbol_info filling_mode bitmask)."""
+    info = mt5.symbol_info(symbol)
+    if info is None:
+        return mt5.ORDER_FILLING_RETURN
+    mode = getattr(info, 'filling_mode', 0)
+    for sym_flag, order_filling in _SYMBOL_TO_ORDER_FILLING:
+        if mode & sym_flag:
+            return order_filling
+    return mt5.ORDER_FILLING_RETURN
+
+
 def get_timeframe(timeframe_str: str) -> MT5Timeframe:
     try:
         return MT5Timeframe[timeframe_str.upper()].value
@@ -18,10 +38,14 @@ def get_timeframe(timeframe_str: str) -> MT5Timeframe:
         )
 
 
-def close_position(position, deviation=20, magic=0, comment='', type_filling=mt5.ORDER_FILLING_IOC):
+def close_position(position, deviation=20, magic=0, comment='', type_filling=None):
     if 'type' not in position or 'ticket' not in position:
         logger.error("Position dictionary missing 'type' or 'ticket' keys.")
         return None
+
+    # Use symbol's allowed filling mode if not specified (avoids "Unsupported filling mode" per broker)
+    if type_filling is None:
+        type_filling = _get_symbol_filling_mode(position['symbol'])
 
     # Close position with opposite order: BUY position → SELL at bid, SELL position → BUY at ask
     order_type_dict = {
@@ -73,7 +97,7 @@ def close_position(position, deviation=20, magic=0, comment='', type_filling=mt5
     return order_result
 
 
-def close_all_positions(order_type='all', magic=None, type_filling=mt5.ORDER_FILLING_IOC):
+def close_all_positions(order_type='all', magic=None, type_filling=None):
     order_type_dict = {
         'BUY': mt5.ORDER_TYPE_BUY,
         'SELL': mt5.ORDER_TYPE_SELL
