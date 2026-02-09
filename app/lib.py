@@ -23,9 +23,10 @@ def close_position(position, deviation=20, magic=0, comment='', type_filling=mt5
         logger.error("Position dictionary missing 'type' or 'ticket' keys.")
         return None
 
+    # Close position with opposite order: BUY position → SELL at bid, SELL position → BUY at ask
     order_type_dict = {
-        0: mt5.ORDER_TYPE_BUY,
-        1: mt5.ORDER_TYPE_SELL
+        0: mt5.ORDER_TYPE_SELL,  # close BUY position with SELL
+        1: mt5.ORDER_TYPE_BUY,    # close SELL position with BUY
     }
 
     position_type = position['type']
@@ -39,8 +40,8 @@ def close_position(position, deviation=20, magic=0, comment='', type_filling=mt5
         return None
 
     price_dict = {
-        0: tick.ask,  # Buy order uses Ask price
-        1: tick.bid   # Sell order uses Bid price
+        0: tick.bid,  # closing BUY = SELL at bid
+        1: tick.ask,   # closing SELL = BUY at ask
     }
 
     price = price_dict[position_type]
