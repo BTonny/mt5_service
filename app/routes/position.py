@@ -245,15 +245,28 @@ def modify_sl_tp_endpoint():
         }
         
         result = mt5.order_send(request_data)
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+        if result is None:
             error_code, error_str = mt5.last_error()
-            error_message = result.comment if result else "MT5 order_send returned None"
             return jsonify({
-                "error": f"Failed to modify SL/TP: {error_message}",
+                "error": "Failed to modify SL/TP: MT5 order_send returned None",
                 "mt5_error": error_str
             }), 400
-        
-        return jsonify({"message": "SL/TP modified successfully", "result": result._asdict()})
+
+        if result.retcode == mt5.TRADE_RETCODE_DONE:
+            return jsonify({"message": "SL/TP modified successfully", "result": result._asdict()})
+
+        if result.retcode == mt5.TRADE_RETCODE_NO_CHANGES:
+            return jsonify({
+                "message": "SL/TP unchanged (already set to requested values)",
+                "result": result._asdict()
+            })
+
+        error_code, error_str = mt5.last_error()
+        error_message = result.comment or "Unknown error"
+        return jsonify({
+            "error": f"Failed to modify SL/TP: {error_message}",
+            "mt5_error": error_str
+        }), 400
     
     except Exception as e:
         logger.error(f"Error in modify_sl_tp: {str(e)}")
