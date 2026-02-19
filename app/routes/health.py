@@ -2,9 +2,13 @@ from flask import Blueprint, jsonify
 import MetaTrader5 as mt5
 from flasgger import swag_from
 import logging
+from mt5_worker import run_mt5
+from cache import get as cache_get, set as cache_set
 
 health_bp = Blueprint('health', __name__)
 logger = logging.getLogger(__name__)
+HEALTH_CACHE_KEY = ("health",)
+HEALTH_TTL = 2
 
 @health_bp.route('/health')
 @swag_from({
@@ -32,12 +36,21 @@ def health_check():
       200:
         description: Health check successful
     """
-    initialized = mt5.initialize() if mt5 is not None else False
-    return jsonify({
+    cached = cache_get(HEALTH_CACHE_KEY)
+    if cached is not None:
+        return jsonify(cached), 200
+    try:
+        initialized = run_mt5(lambda: mt5.initialize() if mt5 is not None else False)
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        initialized = False
+    body = {
         "status": "healthy",
         "mt5_connected": mt5 is not None,
         "mt5_initialized": initialized
-    }), 200
+    }
+    cache_set(HEALTH_CACHE_KEY, body, HEALTH_TTL)
+    return jsonify(body), 200
 
 @health_bp.route('/terminal_info', methods=['GET'])
 @swag_from({
@@ -73,9 +86,9 @@ def get_terminal_info():
     description: Retrieve terminal information including connection status and capabilities.
     """
     try:
-        terminal_info = mt5.terminal_info()
+        terminal_info = run_mt5(mt5.terminal_info)
         if terminal_info is None:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": "Failed to get terminal information",
                 "mt5_error": error_str,

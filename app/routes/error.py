@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify
 import logging
 import MetaTrader5 as mt5
 from flasgger import swag_from
+from mt5_worker import run_mt5
 
 error_bp = Blueprint('error', __name__)
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def last_error_endpoint():
     description: Retrieve the last error code and message from MetaTrader5.
     """
     try:
-        error = mt5.last_error()
+        error = run_mt5(mt5.last_error)
         return jsonify({"error_code": error[0], "error_message": error[1]})
     except Exception as e:
         logger.error(f"Error in last_error: {str(e)}")
@@ -63,7 +64,7 @@ def last_error_str_endpoint():
     description: Retrieve the last error message string from MetaTrader5.
     """
     try:
-        error_code, error_str = mt5.last_error()
+        error_code, error_str = run_mt5(mt5.last_error)
         return jsonify({"error_message": error_str})
     except Exception as e:
         logger.error(f"Error in last_error_str: {str(e)}")

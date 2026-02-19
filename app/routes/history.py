@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 import pytz
 from flasgger import swag_from
+from mt5_worker import run_mt5
 
 history_bp = Blueprint('history', __name__)
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def get_deal_from_ticket_endpoint():
         ticket = int(ticket)
         
         # Get deal by ticket
-        deals = mt5.history_deals_get(ticket=ticket)
+        deals = run_mt5(lambda: mt5.history_deals_get(ticket=ticket))
         if deals is None or len(deals) == 0:
             return jsonify({"error": "Failed to get deal information"}), 404
         
@@ -136,7 +137,7 @@ def get_order_from_ticket_endpoint():
         ticket = int(ticket)
         
         # Get order by ticket
-        orders = mt5.history_orders_get(ticket=ticket)
+        orders = run_mt5(lambda: mt5.history_orders_get(ticket=ticket))
         if orders is None or len(orders) == 0:
             return jsonify({"error": "Failed to get order information"}), 404
         
@@ -249,9 +250,9 @@ def history_deals_get_endpoint():
         # Get deals with optional position filter
         if position:
             position = int(position)
-            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+            deals = run_mt5(lambda: mt5.history_deals_get(from_timestamp, to_timestamp, position=position))
         else:
-            deals = mt5.history_deals_get(from_timestamp, to_timestamp)
+            deals = run_mt5(lambda: mt5.history_deals_get(from_timestamp, to_timestamp))
         
         if deals is None:
             return jsonify({"error": "Failed to get deals history"}), 404
@@ -322,9 +323,9 @@ def history_orders_get_endpoint():
         
         # Get orders with optional ticket filter
         if ticket:
-            orders = mt5.history_orders_get(ticket=ticket)
+            orders = run_mt5(lambda: mt5.history_orders_get(ticket=ticket))
         else:
-            orders = mt5.history_orders_get()
+            orders = run_mt5(lambda: mt5.history_orders_get())
         
         if orders is None:
             return jsonify({"error": "Failed to get orders history"}), 404

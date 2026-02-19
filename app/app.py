@@ -6,6 +6,7 @@ import MetaTrader5 as mt5
 from flasgger import Swagger
 from werkzeug.middleware.proxy_fix import ProxyFix
 from swagger import swagger_config
+from mt5_worker import start_worker
 
 # Import routes
 from routes.health import health_bp
@@ -36,6 +37,9 @@ app.register_blueprint(error_bp)
 app.register_blueprint(account_bp)
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Start MT5 worker thread so all MT5 calls run serially
+start_worker()
 
 if __name__ == '__main__':
     if not mt5.initialize():

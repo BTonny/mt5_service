@@ -4,6 +4,7 @@ import logging
 from flasgger import swag_from
 from datetime import datetime
 import pytz
+from mt5_worker import run_mt5
 
 order_bp = Blueprint('order', __name__)
 logger = logging.getLogger(__name__)
@@ -133,27 +134,10 @@ def send_order_endpoint():
             "type_filling": type_filling,
         }
 
-        # For market orders, get current price
-        if is_market_order:
-            tick = mt5.symbol_info_tick(data['symbol'])
-            if tick is None:
-                return jsonify({"error": "Failed to get symbol price"}), 400
-
-            if order_type_str == 'BUY':
-                request_data["price"] = tick.ask
-            else:  # SELL
-                request_data["price"] = tick.bid
-        else:
-            # For pending orders, price is required
-            if 'price' not in data:
-                return jsonify({"error": "Price is required for limit/stop orders"}), 400
-            request_data["price"] = float(data['price'])
-
         # Add expiration if provided (for pending orders)
         if 'expiration' in data and is_pending_order:
             try:
                 expiration = datetime.fromisoformat(data['expiration'].replace('Z', '+00:00'))
-                # Ensure timezone-aware (if naive, assume UTC)
                 if expiration.tzinfo is None:
                     expiration = pytz.UTC.localize(expiration)
                 request_data["expiration"] = expiration
@@ -166,10 +150,25 @@ def send_order_endpoint():
         if 'tp' in data:
             request_data["tp"] = float(data['tp'])
 
-        # Send order
-        result = mt5.order_send(request_data)
+        # For market orders, get current price and send in worker; for pending, set price and send in worker
+        if is_market_order:
+            def _get_tick_and_send():
+                tick = mt5.symbol_info_tick(data['symbol'])
+                if tick is None:
+                    return None, "no_tick"
+                request_data["price"] = tick.ask if order_type_str == 'BUY' else tick.bid
+                result = mt5.order_send(request_data)
+                return result, None
+            result, err = run_mt5(_get_tick_and_send)
+            if err == "no_tick":
+                return jsonify({"error": "Failed to get symbol price"}), 400
+        else:
+            if 'price' not in data:
+                return jsonify({"error": "Price is required for limit/stop orders"}), 400
+            request_data["price"] = float(data['price'])
+            result = run_mt5(lambda: mt5.order_send(request_data))
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             error_message = result.comment if result else "MT5 order_send returned None"
             
             return jsonify({
@@ -251,10 +250,10 @@ def cancel_order_endpoint():
         }
         
         # Send cancel request
-        result = mt5.order_send(request_data)
+        result = run_mt5(lambda: mt5.order_send(request_data))
         
         if result is None:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": "Failed to cancel order",
                 "mt5_error": error_str,
@@ -262,9 +261,10 @@ def cancel_order_endpoint():
             }), 400
         
         if result.retcode != mt5.TRADE_RETCODE_DONE:
+            _, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": f"Order cancellation failed: {result.comment}",
-                "mt5_error": mt5.last_error()[1],
+                "mt5_error": error_str,
                 "result": result._asdict()
             }), 400
         
@@ -324,12 +324,12 @@ def get_orders_endpoint():
         
         # Get all orders
         if magic is not None:
-            orders = mt5.orders_get(magic=magic)
+            orders = run_mt5(lambda: mt5.orders_get(magic=magic))
         else:
-            orders = mt5.orders_get()
+            orders = run_mt5(lambda: mt5.orders_get())
         
         if orders is None:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": "Failed to retrieve orders",
                 "mt5_error": error_str,

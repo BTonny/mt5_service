@@ -6,9 +6,12 @@ import pytz
 import pandas as pd
 from flasgger import swag_from
 from lib import get_timeframe
+from mt5_worker import run_mt5
+from cache import get as cache_get, set as cache_set, ttl_for_timeframe
 
 data_bp = Blueprint('data', __name__)
 logger = logging.getLogger(__name__)
+FETCH_DATA_RANGE_TTL = 60
 
 @data_bp.route('/fetch_data_pos', methods=['GET'])
 @swag_from({
@@ -83,16 +86,21 @@ def fetch_data_pos_endpoint():
         if not symbol:
             return jsonify({"error": "Symbol parameter is required"}), 400
 
+        cache_key = ("fetch_data_pos", symbol, timeframe, num_bars)
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         mt5_timeframe = get_timeframe(timeframe)
-        
-        rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, num_bars)
+        rates = run_mt5(lambda: mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, num_bars))
         if rates is None:
             return jsonify({"error": "Failed to get rates data"}), 404
         
         df = pd.DataFrame(rates)
         df['time'] = pd.to_datetime(df['time'], unit='s')
-        
-        return jsonify(df.to_dict(orient='records'))
+        records = df.to_dict(orient='records')
+        cache_set(cache_key, records, ttl_for_timeframe(timeframe))
+        return jsonify(records)
     
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -182,21 +190,25 @@ def fetch_data_range_endpoint():
         if not all([symbol, start_str, end_str]):
             return jsonify({"error": "Symbol, start, and end parameters are required"}), 400
 
+        cache_key = ("fetch_data_range", symbol, timeframe, start_str, end_str)
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         mt5_timeframe = get_timeframe(timeframe)
-        
-        # Convert string dates to datetime objects
         utc = pytz.UTC
         start_date = utc.localize(datetime.fromisoformat(start_str.replace('Z', '+00:00')))
         end_date = utc.localize(datetime.fromisoformat(end_str.replace('Z', '+00:00')))
         
-        rates = mt5.copy_rates_range(symbol, mt5_timeframe, start_date, end_date)
+        rates = run_mt5(lambda: mt5.copy_rates_range(symbol, mt5_timeframe, start_date, end_date))
         if rates is None:
             return jsonify({"error": "Failed to get rates data"}), 404
         
         df = pd.DataFrame(rates)
         df['time'] = pd.to_datetime(df['time'], unit='s')
-        
-        return jsonify(df.to_dict(orient='records'))
+        records = df.to_dict(orient='records')
+        cache_set(cache_key, records, FETCH_DATA_RANGE_TTL)
+        return jsonify(records)
     
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

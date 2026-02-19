@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 import MetaTrader5 as mt5
 from flasgger import swag_from
 import logging
+from mt5_worker import run_mt5
 
 symbol_bp = Blueprint('symbol', __name__)
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def get_symbol_info_tick_endpoint(symbol):
     ---
     description: Retrieve the latest tick information for a given symbol.
     """
-    tick = mt5.symbol_info_tick(symbol)
+    tick = run_mt5(lambda: mt5.symbol_info_tick(symbol))
     if tick is None:
         return jsonify({"error": "Failed to get symbol tick info"}), 404
     
@@ -93,7 +94,7 @@ def get_symbol_info(symbol):
     ---
     description: Retrieve detailed information for a given symbol.
     """
-    symbol_info = mt5.symbol_info(symbol)
+    symbol_info = run_mt5(lambda: mt5.symbol_info(symbol))
     if symbol_info is None:
         return jsonify({"error": "Failed to get symbol info"}), 404
     
@@ -153,10 +154,10 @@ def symbol_select_endpoint(symbol):
         data = request.get_json() or {}
         enable = data.get('enable', True)
         
-        result = mt5.symbol_select(symbol, enable)
+        result = run_mt5(lambda: mt5.symbol_select(symbol, enable))
         
         if not result:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": f"Failed to select symbol {symbol}",
                 "mt5_error": error_str,

@@ -2,9 +2,13 @@ from flask import Blueprint, jsonify
 import MetaTrader5 as mt5
 import logging
 from flasgger import swag_from
+from mt5_worker import run_mt5
+from cache import get as cache_get, set as cache_set
 
 account_bp = Blueprint('account', __name__)
 logger = logging.getLogger(__name__)
+ACCOUNT_CACHE_KEY = ("account_info",)
+ACCOUNT_TTL = 2
 
 @account_bp.route('/account_info', methods=['GET'])
 @swag_from({
@@ -48,9 +52,12 @@ def get_account_info():
     description: Retrieve comprehensive account information including balance, equity, margin, and trading status.
     """
     try:
-        account_info = mt5.account_info()
+        cached = cache_get(ACCOUNT_CACHE_KEY)
+        if cached is not None:
+            return jsonify(cached), 200
+        account_info = run_mt5(mt5.account_info)
         if account_info is None:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": "Failed to get account information",
                 "mt5_error": error_str,
@@ -59,7 +66,7 @@ def get_account_info():
         
         # Convert to dictionary
         account_dict = account_info._asdict()
-        
+        cache_set(ACCOUNT_CACHE_KEY, account_dict, ACCOUNT_TTL)
         return jsonify(account_dict), 200
     
     except Exception as e:

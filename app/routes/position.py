@@ -3,9 +3,12 @@ import MetaTrader5 as mt5
 import logging
 from lib import close_position, close_all_positions, get_positions
 from flasgger import swag_from
+from mt5_worker import run_mt5
+from cache import get as cache_get, set as cache_set
 
 position_bp = Blueprint('position', __name__)
 logger = logging.getLogger(__name__)
+POSITIONS_TTL = 2
 
 @position_bp.route('/close_position', methods=['POST'])
 @swag_from({
@@ -91,7 +94,7 @@ def close_position_endpoint():
             else:
                 return jsonify({"error": "Invalid type_filling. Use ORDER_FILLING_IOC, ORDER_FILLING_FOK, or ORDER_FILLING_RETURN."}), 400
 
-        result = close_position(data['position'], type_filling=type_filling)
+        result = run_mt5(lambda: close_position(data['position'], type_filling=type_filling))
         if result is None:
             return jsonify({"error": "Failed to close position"}), 400
         
@@ -161,7 +164,7 @@ def close_all_positions_endpoint():
         order_type = data.get('order_type', 'all')
         magic = data.get('magic')
         
-        results = close_all_positions(order_type, magic)
+        results = run_mt5(lambda: close_all_positions(order_type, magic))
         if not results:
             return jsonify({"message": "No positions were closed"}), 200
         
@@ -244,9 +247,9 @@ def modify_sl_tp_endpoint():
             "tp": tp
         }
         
-        result = mt5.order_send(request_data)
+        result = run_mt5(lambda: mt5.order_send(request_data))
         if result is None:
-            error_code, error_str = mt5.last_error()
+            error_code, error_str = run_mt5(mt5.last_error)
             return jsonify({
                 "error": "Failed to modify SL/TP: MT5 order_send returned None",
                 "mt5_error": error_str
@@ -261,7 +264,7 @@ def modify_sl_tp_endpoint():
                 "result": result._asdict()
             })
 
-        error_code, error_str = mt5.last_error()
+        error_code, error_str = run_mt5(mt5.last_error)
         error_message = result.comment or "Unknown error"
         return jsonify({
             "error": f"Failed to modify SL/TP: {error_message}",
@@ -331,16 +334,23 @@ def get_positions_endpoint():
     """
     try:
         magic = request.args.get('magic', type=int)
+        cache_key = ("get_positions", magic)
+        cached = cache_get(cache_key)
+        if cached is not None:
+            if cached == []:
+                return jsonify({"positions": []}), 200
+            return jsonify(cached), 200
 
-        positions_df = get_positions(magic)
-
+        positions_df = run_mt5(lambda: get_positions(magic))
         if positions_df is None:
             return jsonify({"error": "Failed to retrieve positions"}), 500
             
         if positions_df.empty:
+            cache_set(cache_key, [], POSITIONS_TTL)
             return jsonify({"positions": []}), 200
-            
-        return jsonify(positions_df.to_dict(orient='records')), 200
+        records = positions_df.to_dict(orient='records')
+        cache_set(cache_key, records, POSITIONS_TTL)
+        return jsonify(records), 200
     
     except Exception as e:
         logger.error(f"Error in get_positions: {str(e)}")
@@ -374,7 +384,7 @@ def positions_total_endpoint():
     description: Retrieve the total number of open trading positions.
     """
     try:
-        total = mt5.positions_total()
+        total = run_mt5(lambda: mt5.positions_total())
         if total is None:
             return jsonify({"error": "Failed to get positions total"}), 400
         
